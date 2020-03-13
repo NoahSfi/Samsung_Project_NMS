@@ -23,7 +23,7 @@ from PIL import Image
 from object_detection.utils import ops as utils_ops
 from object_detection.core import post_processing
 from tqdm import tqdm
-
+from PIL import Image, ImageDraw
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
@@ -81,6 +81,19 @@ def getImgClass(catStudied,coco,nbImageStudied):
     nbImg = min(len(img),nbImageStudied)
     img = np.random.choice(img,nbImg)
     return img,catIds
+
+def expand_image_to_4d(image):
+    """image a numpy array representing a gray scale image"""
+    # The function supports only grayscale images
+    assert len(image.shape) == 2, "Not a grayscale input image" 
+    last_axis = -1
+    dim_to_repeat = 2
+    repeats = 3
+    grscale_img_3dims = np.expand_dims(image, last_axis)
+    training_image = np.repeat(grscale_img_3dims, repeats, dim_to_repeat).astype('uint8')
+    assert len(training_image.shape) == 3
+    assert training_image.shape[-1] == 3
+    return training_image
 ###############################################################################
 
 def run_inference_for_single_image(model, image,catIds):
@@ -102,11 +115,11 @@ def run_inference_for_single_image(model, image,catIds):
 
     # Run inference
     #If image doesn't respect the right format ignore it
-    try:
-        output_dict = model(input_tensor)
-    except:
-        return None
-
+#    try:
+#        output_dict = model(input_tensor)
+#    except:
+#        return None
+    output_dict = model(input_tensor)
     # All outputs are batches tensors.
     # Convert to numpy arrays, and take index [0] to remove the batch dimension.
     # We're only interested in the first num_detections.
@@ -147,12 +160,15 @@ def computeInferenceBbox(model, img,catIds):
                    'detection_scores']}
     """
     all_output_dict = dict()
-    for i in tqdm(range(len(img))):
+    for i in tqdm(range(len(img)),position= 0,leave=True,desc = "Images Processed"):
         image_path = 'cocoapi/val2017/' + img[i]['file_name']
-        # the array based representation of the image will be used later 
-        #in order to prepare the
-        # result image with boxes and labels on it.
-        image_np = np.array(Image.open(image_path))
+        # the array based representation of the image 
+        image = Image.open(image_path)
+        image_np = np.array(image)
+        """If image is gray_scale one need to reshape to dimension 4
+        using the utility function defined above"""
+        if len(image_np.shape) == 2:
+            image_np = expand_image_to_4d(image_np)
         # Actual detection.
         output_dict = run_inference_for_single_image(model, image_np,catIds)
         idx = img[i]['id']
@@ -287,7 +303,7 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
     iou_thresholdXaxis = np.linspace(0.2,0.99,number_IoU_thresh)
     AP = []
     all_output_dict = computeInferenceBbox(model,img,catIds)
-    for iou in tqdm(iou_thresholdXaxis):
+    for iou in tqdm(iou_thresholdXaxis,desc = "progressbar IoU Threshold"):
         #Create the Json result file and read it.
         imgIds = writeResJson(img,resFilePath,all_output_dict,catIds,iou_threshold=float(iou))
         print(len(imgIds))
@@ -296,11 +312,14 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
         cocoEval = COCOeval(cocoApi,cocoDt,'bbox')
         cocoEval.params.imgIds  = imgIds
         cocoEval.params.catIds  = catIds
+        #Here we increase the maxDet to 1000 (same as in model config file)
+        #Because we want to optimize the nms that is normally in charge of dealing with
+        #bbox that detects the same object twice or detection that are not very precise
+        #compared to the best one.
+        cocoEval.params.maxDets = [1,10,1000]
         cocoEval.evaluate()
         cocoEval.accumulate()
-        print("for iou_threshold = {}".format(iou))
         cocoEval.summarize()
-        print(cocoEval.stats[1])
         #readDoc and find self.evals
         AP.append(cocoEval.stats[1])
     return AP
@@ -312,16 +331,16 @@ def plotAP(AP,catStudied,number_IoU_thresh = 50):
      """
     iou_thresholdXaxis = np.linspace(0.2,0.99,number_IoU_thresh)
     # Plot the data
-    plt.plot(iou_thresholdXaxis, AP, label='AP')
+    plt.plot(iou_thresholdXaxis, AP, label='AP[IoU=0.5]')
     # Add a legend
     plt.legend()
     plt.title('Class = {}'.format(catStudied))
     plt.xlabel('iou threshold')
-    plt.ylabel('AP')
-    # Show the plot
-    plt.show()
+    plt.ylabel('AP[IoU=0.5]')
+    plt.savefig('graph_result/{}.png'.format(catStudied), bbox_inches='tight')
+    plt.clf()
 
-def main(modelPath,resFilePath,catStudied,nbImageStudied,cocoDir,valType,number_IoU_thresh = 50):
+def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh = 50,catFocus = []):
     """
     input:
 
@@ -335,22 +354,33 @@ def main(modelPath,resFilePath,catStudied,nbImageStudied,cocoDir,valType,number_
     output:
     Graph of AP[IoU = 0.5] in function of different number_IoU_thresh
     """
+
     model = loadModel(modelPath)
     coco = loadCocoApi(dataDir=cocoDir,dataType=valType)
-    img,catIds = getImgClass(catStudied,coco,nbImageStudied)
-
-    AP05 = getAP05(model,img,resFilePath,coco,catIds,number_IoU_thresh=number_IoU_thresh)
-    plotAP(AP05,catStudied,number_IoU_thresh=number_IoU_thresh)
+    
+    categories = getCategories(coco) if catFocus == [] else catFocus
+    for catStudied in tqdm(categories[50:],desc="Categories Processed",leave=False):
+        img,catIds = getImgClass(catStudied,coco,nbImageStudied)
+        if len(img) == 0:
+            #No image from the given category
+            #Write it in order to know which one
+            img = Image.new('RGB', (100, 30), color = (73, 109, 137))
+            d = ImageDraw.Draw(img)
+            d.text((10,10), "No Data to study", fill=(255,255,0))
+            img.save('graph_result/{}.png'.format(catStudied))
+            continue
+        AP05 = getAP05(model,img,resFilePath,coco,catIds,number_IoU_thresh=number_IoU_thresh)
+        plotAP(AP05,catStudied,number_IoU_thresh=number_IoU_thresh)
 
 
 if __name__ == "__main__":
     # execute only if run as a script
     main(modelPath = "model",
         resFilePath = "cocoapi/results/test.json'",
-        catStudied = 'horse', #for now just test with one class
         nbImageStudied = 100,
         cocoDir = "cocoapi",
-        valType = "val2017") 
+        valType = "val2017",
+        catFocus= []) 
 
 
 
