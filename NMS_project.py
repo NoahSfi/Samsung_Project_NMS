@@ -19,7 +19,6 @@ import numpy as np
 import tensorflow as tf
 import json
 from matplotlib import pyplot as plt
-from PIL import Image
 from object_detection.utils import ops as utils_ops
 from object_detection.core import post_processing
 from tqdm import tqdm
@@ -115,11 +114,11 @@ def run_inference_for_single_image(model, image,catIds):
 
     # Run inference
     #If image doesn't respect the right format ignore it
-#    try:
-#        output_dict = model(input_tensor)
-#    except:
-#        return None
-    output_dict = model(input_tensor)
+    try:
+       output_dict = model(input_tensor)
+    except:
+       return None
+    
     # All outputs are batches tensors.
     # Convert to numpy arrays, and take index [0] to remove the batch dimension.
     # We're only interested in the first num_detections.
