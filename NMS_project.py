@@ -299,7 +299,7 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
         List of AP score associated to the list np.linspace(0.01,0.99,number_IoU_thresh)
     """
     
-    iou_thresholdXaxis = np.linspace(0.2,0.99,number_IoU_thresh)
+    iou_thresholdXaxis = np.linspace(0.1,0.99,number_IoU_thresh)
     AP = []
     all_output_dict = computeInferenceBbox(model,img,catIds)
     for iou in tqdm(iou_thresholdXaxis,desc = "progressbar IoU Threshold"):
@@ -321,25 +321,36 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
         cocoEval.summarize()
         #readDoc and find self.evals
         AP.append(cocoEval.stats[1])
-    return AP
+    return np.array(AP)
 
 def plotAP(AP,catStudied,number_IoU_thresh = 50):
     """
     AP: List of score AP
     catStudied: String describing the category of image studied
      """
-    iou_thresholdXaxis = np.linspace(0.2,0.99,number_IoU_thresh)
+    plt.figure(figsize=(18,10))
+    iou_thresholdXaxis = np.linspace(0.1,0.99,number_IoU_thresh)
+    #Put an arrow on the max value
+    IoU_max = iou_thresholdXaxis[np.argmax(AP)]
+    AP_max = AP.max()
+    text= "Best IoU_Thresh ={:.3f}".format(IoU_max)
+    bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
+    arrowprops=dict(arrowstyle="->",connectionstyle="angle,angleA=0,angleB=60")
+    kw = dict(xycoords='data',textcoords="axes fraction",
+              arrowprops=arrowprops, bbox=bbox_props, ha="right", va="top")
+    plt.annotate(text, xy=(IoU_max, AP_max), xytext=(0.94,0.96), **kw)
+
     # Plot the data
     plt.plot(iou_thresholdXaxis, AP, label='AP[IoU=0.5]')
     # Add a legend
-    plt.legend()
+    plt.legend(loc = "lower left")
     plt.title('Class = {}'.format(catStudied))
     plt.xlabel('iou threshold')
     plt.ylabel('AP[IoU=0.5]')
     plt.savefig('graph_result/{}.png'.format(catStudied), bbox_inches='tight')
     plt.clf()
 
-def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh = 50,catFocus = []):
+def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh = 100,catFocus = []):
     """
     input:
 
@@ -358,7 +369,7 @@ def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh 
     coco = loadCocoApi(dataDir=cocoDir,dataType=valType)
     
     categories = getCategories(coco) if catFocus == [] else catFocus
-    for catStudied in tqdm(categories[50:],desc="Categories Processed",leave=False):
+    for catStudied in tqdm(categories[:],desc="Categories Processed",leave=False):
         img,catIds = getImgClass(catStudied,coco,nbImageStudied)
         if len(img) == 0:
             #No image from the given category
