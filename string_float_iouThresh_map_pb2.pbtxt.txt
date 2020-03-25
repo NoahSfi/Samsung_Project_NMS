@@ -1,0 +1,478 @@
+item {
+  id: 1
+  display_name: person
+  iou_threshold: 0.4236
+}
+
+item {
+  id: 2
+  display_name: bicycle
+  iou_threshold: 0.5855
+}
+
+item {
+  id: 3
+  display_name: car
+  iou_threshold: 0.4956
+}
+
+item {
+  id: 4
+  display_name: motorcycle
+  iou_threshold: 0.5585
+}
+
+item {
+  id: 5
+  display_name: airplane
+  iou_threshold: 0.5585
+}
+
+item {
+  id: 6
+  display_name: bus
+  iou_threshold: 0.2348
+}
+
+item {
+  id: 7
+  display_name: train
+  iou_threshold: 0.4057
+}
+
+item {
+  id: 8
+  display_name: truck
+  iou_threshold: 0.5585
+}
+
+item {
+  id: 9
+  display_name: boat
+  iou_threshold: 0.2618
+}
+
+item {
+  id: 10
+  display_name: traffic light
+  iou_threshold: 0.4686
+}
+
+item {
+  id: 11
+  display_name: fire hydrant
+  iou_threshold: 0.1
+}
+
+item {
+  id: 13
+  display_name: stop sign
+  iou_threshold: 0.1
+}
+
+item {
+  id: 14
+  display_name: parking meter
+  iou_threshold: 0.1809
+}
+
+item {
+  id: 15
+  display_name: bench
+  iou_threshold: 0.4956
+}
+
+item {
+  id: 16
+  display_name: bird
+  iou_threshold: 0.1989
+}
+
+item {
+  id: 17
+  display_name: cat
+  iou_threshold: 0.5045
+}
+
+item {
+  id: 18
+  display_name: dog
+  iou_threshold: 0.3877
+}
+
+item {
+  id: 19
+  display_name: horse
+  iou_threshold: 0.7563
+}
+
+item {
+  id: 20
+  display_name: sheep
+  iou_threshold: 0.4956
+}
+
+item {
+  id: 21
+  display_name: cow
+  iou_threshold: 0.4776
+}
+
+item {
+  id: 22
+  display_name: elephant
+  iou_threshold: 0.6214
+}
+
+item {
+  id: 23
+  display_name: bear
+  iou_threshold: 0.2259
+}
+
+item {
+  id: 24
+  display_name: zebra
+  iou_threshold: 0.4236
+}
+
+item {
+  id: 25
+  display_name: giraffe
+  iou_threshold: 0.5225
+}
+
+item {
+  id: 27
+  display_name: backpack
+  iou_threshold: 0.5495
+}
+
+item {
+  id: 28
+  display_name: umbrella
+  iou_threshold: 0.3158
+}
+
+item {
+  id: 31
+  display_name: handbag
+  iou_threshold: 0.3697
+}
+
+item {
+  id: 32
+  display_name: tie
+  iou_threshold: 0.2798
+}
+
+item {
+  id: 33
+  display_name: suitcase
+  iou_threshold: 0.4686
+}
+
+item {
+  id: 34
+  display_name: frisbee
+  iou_threshold: 0.2888
+}
+
+item {
+  id: 35
+  display_name: skis
+  iou_threshold: 0.5405
+}
+
+item {
+  id: 36
+  display_name: snowboard
+  iou_threshold: 0.3877
+}
+
+item {
+  id: 37
+  display_name: sports ball
+  iou_threshold: 0.1
+}
+
+item {
+  id: 38
+  display_name: kite
+  iou_threshold: 0.7473
+}
+
+item {
+  id: 39
+  display_name: baseball bat
+  iou_threshold: 0.7832
+}
+
+item {
+  id: 40
+  display_name: baseball glove
+  iou_threshold: 0.1
+}
+
+item {
+  id: 41
+  display_name: skateboard
+  iou_threshold: 0.3247
+}
+
+item {
+  id: 42
+  display_name: surfboard
+  iou_threshold: 0.4146
+}
+
+item {
+  id: 43
+  display_name: tennis racket
+  iou_threshold: 0.2348
+}
+
+item {
+  id: 44
+  display_name: bottle
+  iou_threshold: 0.2259
+}
+
+item {
+  id: 46
+  display_name: wine glass
+  iou_threshold: 0.2348
+}
+
+item {
+  id: 47
+  display_name: cup
+  iou_threshold: 0.5855
+}
+
+item {
+  id: 48
+  display_name: fork
+  iou_threshold: 0.3607
+}
+
+item {
+  id: 49
+  display_name: knife
+  iou_threshold: 0.954
+}
+
+item {
+  id: 50
+  display_name: spoon
+  iou_threshold: 0.3158
+}
+
+item {
+  id: 51
+  display_name: bowl
+  iou_threshold: 0.4596
+}
+
+item {
+  id: 52
+  display_name: banana
+  iou_threshold: 0.6304
+}
+
+item {
+  id: 53
+  display_name: apple
+  iou_threshold: 0.3517
+}
+
+item {
+  id: 54
+  display_name: sandwich
+  iou_threshold: 0.3068
+}
+
+item {
+  id: 55
+  display_name: orange
+  iou_threshold: 0.1629
+}
+
+item {
+  id: 56
+  display_name: broccoli
+  iou_threshold: 0.4686
+}
+
+item {
+  id: 3
+  display_name: carrot
+  iou_threshold: 0.1
+}
+
+item {
+  id: 18
+  display_name: hot dog
+}
+
+item {
+  id: 59
+  display_name: pizza
+  iou_threshold: 0.7293
+}
+
+item {
+  id: 60
+  display_name: donut
+  iou_threshold: 0.4416
+}
+
+item {
+  id: 61
+  display_name: cake
+  iou_threshold: 0.2798
+}
+
+item {
+  id: 62
+  display_name: chair
+  iou_threshold: 0.2528
+}
+
+item {
+  id: 63
+  display_name: couch
+  iou_threshold: 0.6754
+}
+
+item {
+  id: 64
+  display_name: potted plant
+  iou_threshold: 0.2259
+}
+
+item {
+  id: 65
+  display_name: bed
+  iou_threshold: 0.6933
+}
+
+item {
+  id: 67
+  display_name: dining table
+  iou_threshold: 0.6664
+}
+
+item {
+  id: 70
+  display_name: toilet
+  iou_threshold: 0.4596
+}
+
+item {
+  id: 72
+  display_name: tv
+  iou_threshold: 0.6214
+}
+
+item {
+  id: 73
+  display_name: laptop
+  iou_threshold: 0.6843
+}
+
+item {
+  id: 74
+  display_name: mouse
+  iou_threshold: 0.6664
+}
+
+item {
+  id: 75
+  display_name: remote
+  iou_threshold: 0.136
+}
+
+item {
+  id: 76
+  display_name: keyboard
+  iou_threshold: 0.5944
+}
+
+item {
+  id: 77
+  display_name: cell phone
+  iou_threshold: 0.2798
+}
+
+item {
+  id: 78
+  display_name: microwave
+  iou_threshold: 0.1
+}
+
+item {
+  id: 79
+  display_name: oven
+  iou_threshold: 0.4416
+}
+
+item {
+  id: 80
+  display_name: toaster
+  iou_threshold: 0.1
+}
+
+item {
+  id: 81
+  display_name: sink
+  iou_threshold: 0.6214
+}
+
+item {
+  id: 82
+  display_name: refrigerator
+  iou_threshold: 0.5765
+}
+
+item {
+  id: 84
+  display_name: book
+  iou_threshold: 0.6124
+}
+
+item {
+  id: 85
+  display_name: clock
+  iou_threshold: 0.1
+}
+
+item {
+  id: 86
+  display_name: vase
+  iou_threshold: 0.1989
+}
+
+item {
+  id: 87
+  display_name: scissors
+  iou_threshold: 0.7113
+}
+
+item {
+  id: 23
+  display_name: teddy bear
+}
+
+item {
+  id: 89
+  display_name: hair drier
+  iou_threshold: 0.2798
+}
+
+item {
+  id: 90
+  display_name: toothbrush
+  iou_threshold: 0.1
+}
+

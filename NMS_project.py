@@ -73,7 +73,6 @@ def getImgClass(catStudied,coco,nbImageStudied):
 
         catIds: List of index of categories stydied
     """ 
-    catStudied = catStudied
     catIds = coco.getCatIds(catNms=catStudied)
     imgIds = coco.getImgIds(catIds=catIds)
     img = coco.loadImgs(imgIds)
@@ -123,24 +122,28 @@ def run_inference_for_single_image(model, image,catIds):
     # Convert to numpy arrays, and take index [0] to remove the batch dimension.
     # We're only interested in the first num_detections.
     num_detections = int(output_dict.pop('num_detections'))
-    output_dict = {key:value[0, :num_detections].numpy() 
+    output_dict = {key:value[0, :num_detections].numpy()
                  for key,value in output_dict.items()}
-    output_dict['num_detections'] = num_detections
     
-    key_of_interest = ['num_detections','detection_classes','detection_boxes',
-                   'detection_scores']
-    output_dict = { key: output_dict[key] for key in key_of_interest}
-
+    
+    key_of_interest = ['detection_scores','detection_classes','detection_boxes']
+    output_dict = { key: list(output_dict[key]) for key in key_of_interest}
+    output_dict["num_detections"] = num_detections
+  
     #remove detection of other classes that are not studied
-    idx_to_remove = [i for i,x in zip(range(len(output_dict["detection_classes"])),output_dict["detection_classes"]) if x in catIds]
+    idx_to_remove = [i for i,x in zip(range(len(output_dict["detection_classes"])),output_dict["detection_classes"]) if x not in catIds]
     for index in sorted(idx_to_remove, reverse=True):
-        np.delete(output_dict['detection_scores'],index)
-        np.delete(output_dict['detection_classes'],index)
-        np.delete(output_dict['detection_boxes'],index)
+        del output_dict['detection_scores'][index]
+        del output_dict['detection_classes'][index]
+        del output_dict['detection_boxes'][index]
         output_dict["num_detections"] -= 1
+    num_detections = output_dict["num_detections"]
+    output_dict = { key: np.array(output_dict[key]) for key in key_of_interest}
+    output_dict["num_detections"] = num_detections
+
+    if len(output_dict["detection_boxes"]) == 0:
+        return None
     return output_dict
-
-
 def computeInferenceBbox(model, img,catIds):
     
     """
@@ -172,7 +175,6 @@ def computeInferenceBbox(model, img,catIds):
         output_dict = run_inference_for_single_image(model, image_np,catIds)
         idx = img[i]['id']
         all_output_dict[idx] = output_dict
-   
     return all_output_dict
 
 
@@ -195,10 +197,12 @@ def computeNMS(output_dict,iou_threshold = 0.6):
     #box_selection = post_processing.multiclass_non_max_suppression([output_dict['detection_boxes']], output_dict['detection_scores'], score_thresh=.8, iou_thresh=.5, max_size_per_class=0)
     
     # Apply the nms
+    
     box_selection = tf.image.non_max_suppression_with_scores(
-      output_dict['detection_boxes'],output_dict['detection_scores'], 100, 
-      iou_threshold= iou_threshold,score_threshold=float('-inf'), 
-      soft_nms_sigma=0.0, name=None)
+        output_dict['detection_boxes'],output_dict['detection_scores'], 100, 
+        iou_threshold= iou_threshold,score_threshold=float('-inf'), 
+        soft_nms_sigma=0.0, name=None)
+    
     
     #Index in the list output_dict['detection_boxes']
     final_boxes = list(box_selection[0].numpy())
@@ -236,7 +240,7 @@ def putCOCOformat(boxes,im_width,im_height):
     return [left,top,width,height]
 
 
-def writeResJson(img,resFilePath,all_output_dict,catIds,iou_threshold):
+def writeResJson(img,resFilePath, all_output_dict,catIds,iou_threshold):
     """
     Write a Json file in the coco annotations format for bbox detections
     
@@ -280,13 +284,13 @@ def writeResJson(img,resFilePath,all_output_dict,catIds,iou_threshold):
             properties["score"]= float(final_scores[j])
 
             result.append(properties)
-    with open(resFilePath, 'w') as fs:
+    with open(resFilePath, 'w+') as fs:
         json.dump(result, fs, indent=1)
     return list(imgIds)
 
 
 
-def getAP05(model,img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
+def getAP05(model,img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
     """
     input:
         model : OD detector
@@ -305,8 +309,10 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
     for iou in tqdm(iou_thresholdXaxis,desc = "progressbar IoU Threshold"):
         #Create the Json result file and read it.
         imgIds = writeResJson(img,resFilePath,all_output_dict,catIds,iou_threshold=float(iou))
-        print(len(imgIds))
         cocoDt=cocoApi.loadRes(resFilePath)
+        # except:
+        #     AP.append(0)
+        #     continue
         # running evaluation
         cocoEval = COCOeval(cocoApi,cocoDt,'bbox')
         cocoEval.params.imgIds  = imgIds
@@ -321,7 +327,9 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
         cocoEval.summarize()
         #readDoc and find self.evals
         AP.append(cocoEval.stats[1])
-    return np.array(AP)
+    with open("class_value_AP/{}.json".format(catStudied), 'w+') as fs:
+        json.dump([list(iou_thresholdXaxis),AP], fs, indent=1)
+    return np.array(AP),round(iou_thresholdXaxis[AP.index(max(AP))],4)
 
 def plotAP(AP,catStudied,number_IoU_thresh = 50):
     """
@@ -350,7 +358,7 @@ def plotAP(AP,catStudied,number_IoU_thresh = 50):
     plt.savefig('graph_result/{}.png'.format(catStudied), bbox_inches='tight')
     plt.clf()
 
-def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh = 100,catFocus = []):
+def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh = 50,catFocus = []):
     """
     input:
 
@@ -369,24 +377,42 @@ def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh 
     coco = loadCocoApi(dataDir=cocoDir,dataType=valType)
     
     categories = getCategories(coco) if catFocus == [] else catFocus
-    for catStudied in tqdm(categories[:],desc="Categories Processed",leave=False):
-        img,catIds = getImgClass(catStudied,coco,nbImageStudied)
-        if len(img) == 0:
-            #No image from the given category
-            #Write it in order to know which one
-            img = Image.new('RGB', (100, 30), color = (73, 109, 137))
-            d = ImageDraw.Draw(img)
-            d.text((10,10), "No Data to study", fill=(255,255,0))
-            img.save('graph_result/{}.png'.format(catStudied))
-            continue
-        AP05 = getAP05(model,img,resFilePath,coco,catIds,number_IoU_thresh=number_IoU_thresh)
-        plotAP(AP05,catStudied,number_IoU_thresh=number_IoU_thresh)
+    end = '\n'
+    s = ' '
+    with open("iouThreshmap.txt", 'w+') as f:
+        for catStudied in tqdm(categories,desc="Categories Processed",leave=False):
+            img,catIds = getImgClass(catStudied,coco,nbImageStudied)
+            if len(img) == 0:
+                #No image from the given category
+                #Write it in order to know which one
+                img = Image.new('RGB', (100, 30), color = (73, 109, 137))
+                d = ImageDraw.Draw(img)
+                d.text((10,10), "No Data to study", fill=(255,255,0))
+                img.save('graph_result/{}.png'.format(catStudied))
+                out = ''
+                out += 'item' + s + '{' + end
+                out += s*2 + 'id:' + ' ' + (str(catIds[0])) + end
+                out += s*2 + 'display_name:' + s + catStudied  + end
+                out += '}' + end*2
+                f.write(out)
+                continue
+            AP05,iou = getAP05(model,img,resFilePath,coco,catIds,catStudied,number_IoU_thresh=number_IoU_thresh)
+            
+            out = ''
+            out += 'item' + s + '{' + end
+            out += s*2 + 'id:' + ' ' + (str(catIds[0])) + end
+            out += s*2 + 'display_name:' + s + catStudied  + end
+            out += s*2 + 'iou_threshold:' + s + str(iou) + end
+            out += '}' + end*2
+            f.write(out)
+            
+            plotAP(AP05,catStudied,number_IoU_thresh=number_IoU_thresh)
 
 
 if __name__ == "__main__":
     # execute only if run as a script
     main(modelPath = "model",
-        resFilePath = "cocoapi/results/test.json'",
+        resFilePath = "cocoapi/results/iou.json",
         nbImageStudied = 100,
         cocoDir = "cocoapi",
         valType = "val2017",
