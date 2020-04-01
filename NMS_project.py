@@ -310,10 +310,6 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 
         #Create the Json result file and read it.
         imgIds = writeResJson(img,resFilePath,all_output_dict,catIds,iou_threshold=float(iou))
         cocoDt=cocoApi.loadRes(resFilePath)
-        # except:
-        #     AP.append(0)
-        #     continue
-        # running evaluation
         cocoEval = COCOeval(cocoApi,cocoDt,'bbox')
         cocoEval.params.imgIds  = imgIds
         cocoEval.params.catIds  = catIds
@@ -327,8 +323,8 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 
         cocoEval.summarize()
         #readDoc and find self.evals
         AP.append(cocoEval.stats[1])
-    with open("class_value_AP/{}.json".format(catStudied), 'w+') as fs:
-        json.dump([list(iou_thresholdXaxis),AP], fs, indent=1)
+    with open("class_value_AP/{}.json".format(catStudied), 'w') as fs:
+        json.dump([{"iou_threshold": list(iou_thresholdXaxis),"AP[IoU:0.5]":AP}], fs, indent=1)
     return np.array(AP),round(iou_thresholdXaxis[AP.index(max(AP))],4)
 
 def plotAP(AP,catStudied,number_IoU_thresh = 50):
@@ -379,7 +375,7 @@ def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh 
     categories = getCategories(coco) if catFocus == [] else catFocus
     end = '\n'
     s = ' '
-    with open("iouThreshmap.txt", 'w+') as f:
+    with open("string_float_iouThresh_map_pb2.pbtxt", 'w+') as f:
         for catStudied in tqdm(categories,desc="Categories Processed",leave=False):
             img,catIds = getImgClass(catStudied,coco,nbImageStudied)
             if len(img) == 0:
@@ -413,7 +409,7 @@ if __name__ == "__main__":
     # execute only if run as a script
     main(modelPath = "model",
         resFilePath = "cocoapi/results/iou.json",
-        nbImageStudied = 100,
+        nbImageStudied = float("inf"),
         cocoDir = "cocoapi",
         valType = "val2017",
         catFocus= []) 
