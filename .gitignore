@@ -1,3 +1,5 @@
 cocoapi/val2014/*
 cocoapi/annotations/*
 cocoapi/val2017/*
+__pycache__
+.vscode
