@@ -320,7 +320,7 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 
         cocoEval.params.maxDets = [1,10,1000]
         cocoEval.evaluate()
         cocoEval.accumulate()
-        cocoEval.summarize()
+        # cocoEval.summarize()
         #readDoc and find self.evals
         AP.append(cocoEval.stats[1])
     with open("class_value_AP/{}.json".format(catStudied), 'w') as fs:

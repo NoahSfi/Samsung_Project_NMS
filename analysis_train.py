@@ -142,7 +142,7 @@ def writeResToJson(resFilePath,coco,catIds,img,iou_threshold):
         json.dump(result, fs, indent=1)
     return list(imgIds) 
 
-def getAP05(img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
+def getAP095(img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
     """
     input:
         model : OD detector
@@ -157,7 +157,6 @@ def getAP05(img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
     
     iou_thresholdXaxis = np.linspace(0.2,0.9,number_IoU_thresh)
     AP = []
-    res_iou = list()
     for iou_threshold in tqdm(iou_thresholdXaxis,desc = "progressbar IoU Threshold"):
         #Create the Json result file and read it.
         imgIds = writeResToJson(resFilePath,cocoApi,catIds,img,iou_threshold)
@@ -171,48 +170,48 @@ def getAP05(img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
         #compared to the best one.
         cocoEval.params.maxDets = [1,10,1000]
         cocoEval.evaluate()
-        # for iou_arrays in cocoEval.ious.values():
-          
-        #     for iou in iou_arrays[0]:
-        #         if iou > 0.1 and iou <0.98: 
-        #             res_iou.append(iou)
-        # print(res_iou)
-        # return res_iou
+        
         cocoEval.accumulate()
         cocoEval.summarize()
         #readDoc and find self.evals
-        AP.append(cocoEval.stats[1])
+        #modified version of pycocotools to have 3rd argument to be AP[IoU = 0.95]
+        AP.append(cocoEval.stats[2])
     
     return AP
 
 
 
-# def getIoU(coco,catIds):
+def getIoU(cocoApi,catIds,resFilePath):
     
-#     iou = list()
-#     imgIds = coco.getImgIds(catIds=catIds)
-#     cocoDt=cocoApi.loadRes(resFilePath)
-#     cocoEval = COCOeval(cocoApi,cocoDt,'bbox')
-#     cocoEval.params.imgIds  = imgIds
-#     cocoEval.params.catIds  = catIds
-#     #Here we increase the maxDet to 1000 (same as in model config file)
-#     #Because we want to optimize the nms that is normally in charge of dealing with
-#     #bbox that detects the same object twice or detection that are not very precise
-#     #compared to the best one.
-#     cocoEval.params.maxDets = [1,10,1000]
-#     cocoEval.evaluate()
-
+    res_iou = list()
+    imgIds = writeResToJson(resFilePath,cocoApi,catIds,img,1)
+    cocoDt=cocoApi.loadRes(resFilePath)
+    cocoEval = COCOeval(cocoApi,cocoDt,'bbox')
+    cocoEval.params.imgIds  = imgIds
+    cocoEval.params.catIds  = catIds
+    #Here we increase the maxDet to 1000 (same as in model config file)
+    #Because we want to optimize the nms that is normally in charge of dealing with
+    #bbox that detects the same object twice or detection that are not very precise
+    #compared to the best one.
+    cocoEval.params.maxDets = [1,10,1000]
+    cocoEval.evaluate()
+    for iou_arrays in cocoEval.ious.values():
+        for iou in iou_arrays[0]:
+            if iou > 0.1 and iou <0.98: 
+                res_iou.append(iou)
+        print(res_iou)
+        return res_iou
 def plotAP(AP,catStudied,number_IoU_thresh):
     
     plt.figure(figsize=(18,10))
     iou_thresholdXaxis = np.linspace(0.2,0.9,number_IoU_thresh)
     # Plot the data
-    plt.plot(iou_thresholdXaxis, AP, label='AP[IoU=0.5]')
+    plt.plot(iou_thresholdXaxis, AP, label='AP[IoU=0.95]')
     # Add a legend
     plt.legend(loc = "lower left")
     plt.title('Class = {}'.format(catStudied))
     plt.xlabel('iou threshold')
-    plt.ylabel('AP[IoU=0.5]')
+    plt.ylabel('AP[IoU=0.95]')
     plt.savefig('graph_result_train/{}.png'.format(catStudied), bbox_inches='tight')
     plt.clf()
    
@@ -220,14 +219,17 @@ def plotHistIou(ious,catStudied):
     plt.figure(figsize=(18,10))
     nb_bins = 20
     plt.hist(ious,bins=nb_bins)
+    plt.ylabel('Number of detections')
+    plt.xlabel("IoU")
+    plt.title('Class = {}'.format(catStudied))
     plt.savefig('graph_result_train/hist_{}.png'.format(catStudied), bbox_inches='tight')
     plt.clf()
 
 coco = loadCocoApi(dataType="train2017")
 resFilePath = "cocoapi/results/train_res.json"
-img,catIds = getImgClass("car",coco,float("inf"))
+img,catIds = getImgClass("car",coco,1000)
 
-AP = getAP05(img,resFilePath,coco,catIds[0])  
+AP = getAP095(img,resFilePath,coco,catIds[0])  
 # plotHistIou(ious,"car")
 
 plotAP(AP,"car",50)
