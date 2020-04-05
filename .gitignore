@@ -3,3 +3,4 @@ cocoapi/annotations/*
 cocoapi/val2017/*
 __pycache__
 .vscode
+.ipynb_checkpoints
