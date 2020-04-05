@@ -42,7 +42,7 @@ def getBbox(coco,image_Id,catId):
     Input:
         [left,top,width,height]
     output:
-        List of the form [xmin,ymin,xmax,ymax]  describing each bbox of the given image_Id0
+        List of the form [xmin,ymin,xmax,ymax]  describing each bbox of the given image_Id
     """
     annIds = coco.getAnnIds(imgIds=image_Id, catIds=catId, iscrowd=None)
     anns = coco.loadAnns(annIds)
@@ -142,7 +142,7 @@ def writeResToJson(resFilePath,coco,catIds,img,iou_threshold):
         json.dump(result, fs, indent=1)
     return list(imgIds) 
 
-def getAP095(img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
+def getAP095(img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
     """
     input:
         model : OD detector
@@ -176,12 +176,13 @@ def getAP095(img,resFilePath,cocoApi,catIds,number_IoU_thresh = 50):
         #readDoc and find self.evals
         #modified version of pycocotools to have 3rd argument to be AP[IoU = 0.95]
         AP.append(cocoEval.stats[2])
-    
+    with open("class_train_AP/{}.json".format(catStudied), 'w') as fs:
+        json.dump([{"iou_threshold": list(iou_thresholdXaxis),"AP[IoU:0.95]":AP}], fs, indent=1)
     return AP
 
 
 
-def getIoU(cocoApi,catIds,resFilePath):
+def getIoU(cocoApi,catIds,resFilePath,img):
     
     res_iou = list()
     imgIds = writeResToJson(resFilePath,cocoApi,catIds,img,1)
@@ -199,8 +200,8 @@ def getIoU(cocoApi,catIds,resFilePath):
         for iou in iou_arrays[0]:
             if iou > 0.1 and iou <0.98: 
                 res_iou.append(iou)
-        print(res_iou)
-        return res_iou
+        
+    return res_iou
 def plotAP(AP,catStudied,number_IoU_thresh):
     
     plt.figure(figsize=(18,10))
@@ -224,15 +225,19 @@ def plotHistIou(ious,catStudied):
     plt.title('Class = {}'.format(catStudied))
     plt.savefig('graph_result_train/hist_{}.png'.format(catStudied), bbox_inches='tight')
     plt.clf()
-
-coco = loadCocoApi(dataType="train2017")
-resFilePath = "cocoapi/results/train_res.json"
-img,catIds = getImgClass("car",coco,1000)
-
-AP = getAP095(img,resFilePath,coco,catIds[0])  
-# plotHistIou(ious,"car")
-
-plotAP(AP,"car",50)
+    
+def main(dataType,resFilePath):
+    coco = loadCocoApi(dataType=dataType)
+    categories = getCategories(coco)
+    for catStudied in tqdm(categories,desc="Categories Processed",leave=False):
+        img,catIds = getImgClass(catStudied,coco)
+        AP = getAP095(img,resFilePath,coco,catIds,catStudied)  
+        ious = getIoU(coco,catIds,resFilePath,img)
+        plotHistIou(ious,catStudied)
+        plotAP(AP,catStudied,50)
 
         
-          
+if __name__ == "__main__":
+    # execute only if run as a script
+    main(resFilePath = "cocoapi/results/train_res.json",
+        dataType = "train2017") 

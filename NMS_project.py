@@ -15,6 +15,7 @@ and `2017 val/train annotations` under the names `val2017` and `annotations`"""
 
 # import the necessary packages
 
+import glob
 import numpy as np
 import tensorflow as tf
 import json
@@ -56,7 +57,7 @@ def getCategories(coco):
     categories=[cat['name'] for cat in cats]
     return categories
 
-def getImgClass(catStudied,coco,nbImageStudied):
+def getImgClass(catStudied,coco):
     # get all images containing given categories, and the Index of categories studied
     """
     input:
@@ -73,12 +74,10 @@ def getImgClass(catStudied,coco,nbImageStudied):
 
         catIds: List of index of categories stydied
     """ 
-    catIds = coco.getCatIds(catNms=catStudied)
+    catIds = coco.getCatIds(catNms=[catStudied])
     imgIds = coco.getImgIds(catIds=catIds)
     img = coco.loadImgs(imgIds)
-    nbImg = min(len(img),nbImageStudied)
-    img = np.random.choice(img,nbImg)
-    return img,catIds
+    return img,catIds[0]
 
 def expand_image_to_4d(image):
     """image a numpy array representing a gray scale image"""
@@ -94,7 +93,7 @@ def expand_image_to_4d(image):
     return training_image
 ###############################################################################
 
-def run_inference_for_single_image(model, image,catIds):
+def run_inference_for_single_image(model, image):
     
     """
     input:
@@ -130,21 +129,10 @@ def run_inference_for_single_image(model, image,catIds):
     output_dict = { key: list(output_dict[key]) for key in key_of_interest}
     output_dict["num_detections"] = num_detections
   
-    #remove detection of other classes that are not studied
-    idx_to_remove = [i for i,x in zip(range(len(output_dict["detection_classes"])),output_dict["detection_classes"]) if x not in catIds]
-    for index in sorted(idx_to_remove, reverse=True):
-        del output_dict['detection_scores'][index]
-        del output_dict['detection_classes'][index]
-        del output_dict['detection_boxes'][index]
-        output_dict["num_detections"] -= 1
-    num_detections = output_dict["num_detections"]
-    output_dict = { key: np.array(output_dict[key]) for key in key_of_interest}
-    output_dict["num_detections"] = num_detections
-
     if len(output_dict["detection_boxes"]) == 0:
         return None
     return output_dict
-def computeInferenceBbox(model, img,catIds):
+def computeInferenceBbox(model):
     
     """
     For all the images in the coco img, compute the output_dict with
@@ -162,8 +150,8 @@ def computeInferenceBbox(model, img,catIds):
                    'detection_scores']}
     """
     all_output_dict = dict()
-    for i in tqdm(range(len(img)),position= 0,leave=True,desc = "Images Processed"):
-        image_path = 'cocoapi/val2017/' + img[i]['file_name']
+    i = 0 
+    for image_path in tqdm(glob.glob("cocoapi/val2017/*.jpg")):
         # the array based representation of the image 
         image = Image.open(image_path)
         image_np = np.array(image)
@@ -172,11 +160,12 @@ def computeInferenceBbox(model, img,catIds):
         if len(image_np.shape) == 2:
             image_np = expand_image_to_4d(image_np)
         # Actual detection.
-        output_dict = run_inference_for_single_image(model, image_np,catIds)
-        idx = img[i]['id']
+        output_dict = run_inference_for_single_image(model, image_np)
+        idx = image_path.split("/")[-1]
         all_output_dict[idx] = output_dict
+        i += 1
     return all_output_dict
-
+###############################################################################
 
 def computeNMS(output_dict,iou_threshold = 0.6):
     
@@ -214,7 +203,7 @@ def computeNMS(output_dict,iou_threshold = 0.6):
         #We want the actual bbox coordinate not the index
         final_boxes[i] = output_dict['detection_boxes'][index]
         final_classes.append(output_dict['detection_classes'][index])
-    
+   
     return final_classes,final_scores,final_boxes
 
 ###############################################################################
@@ -259,26 +248,42 @@ def writeResJson(img,resFilePath, all_output_dict,catIds,iou_threshold):
     """
     result = []
     imgIds = set() #set to avoid repetition
-    
+    key_of_interest = ['detection_scores','detection_classes','detection_boxes']
     for i in range(len(img)):
-
+        
+        try:
+            output_dict = all_output_dict[img[i]['file_name']].copy()
+        except:
+            continue
+        
+        #remove detection of other classes that are not studied
+        idx_to_remove = [i for i,x in enumerate(output_dict["detection_classes"]) if x != catIds]
+        for index in sorted(idx_to_remove, reverse=True):
+            del output_dict['detection_scores'][index]
+            del output_dict['detection_classes'][index]
+            del output_dict['detection_boxes'][index]
+            output_dict["num_detections"] -= 1
+        num_detections = output_dict["num_detections"]
+        output_dict = { key: np.array(output_dict[key]) for key in key_of_interest}
+        output_dict["num_detections"] = num_detections
+        if len(output_dict['detection_boxes']) == 0:
+            output_dict = None
         #[ymin,xmin,ymax,xmax] normalized
-        final_classes,final_scores,final_boxes = computeNMS(all_output_dict[img[i]['id']],iou_threshold=iou_threshold)
-
+        
+        final_classes,final_scores,final_boxes = computeNMS(output_dict,iou_threshold=iou_threshold)
         if not final_classes: 
             continue
+        imgId = img[i]["id"]
+        imgIds.add(imgId)
         for j in range(len(final_classes)):
             
             #ex : {"image_id":42,"category_id":18,"bbox":[258.15,41.29,348.26,243.78],"score":0.236}
             properties = {}
             #json format doesnt support int64
             properties["category_id"] = int(final_classes[j])
-            imgId = img[i]["id"]
             properties["image_id"] = imgId
-            imgIds.add(imgId)
             im_width = img[i]['width']
             im_height = img[i]['height']
-
             #we want [ymin,xmin,ymax,xmax] -> [xmin,ymin,width,height]
             properties["bbox"] = putCOCOformat(final_boxes[j],im_width,im_height)
             properties["score"]= float(final_scores[j])
@@ -290,7 +295,7 @@ def writeResJson(img,resFilePath, all_output_dict,catIds,iou_threshold):
 
 
 
-def getAP05(model,img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
+def getAP05(model,all_output_dict,img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
     """
     input:
         model : OD detector
@@ -303,12 +308,14 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 
         List of AP score associated to the list np.linspace(0.01,0.99,number_IoU_thresh)
     """
     
-    iou_thresholdXaxis = np.linspace(0.1,0.99,number_IoU_thresh)
+    iou_thresholdXaxis = np.linspace(0.2,0.9,number_IoU_thresh)
     AP = []
-    all_output_dict = computeInferenceBbox(model,img,catIds)
+    
     for iou in tqdm(iou_thresholdXaxis,desc = "progressbar IoU Threshold"):
         #Create the Json result file and read it.
         imgIds = writeResJson(img,resFilePath,all_output_dict,catIds,iou_threshold=float(iou))
+        if len(imgIds) == 0:
+            return np.array([]),None
         cocoDt=cocoApi.loadRes(resFilePath)
         cocoEval = COCOeval(cocoApi,cocoDt,'bbox')
         cocoEval.params.imgIds  = imgIds
@@ -320,7 +327,7 @@ def getAP05(model,img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 
         cocoEval.params.maxDets = [1,10,1000]
         cocoEval.evaluate()
         cocoEval.accumulate()
-        # cocoEval.summarize()
+        cocoEval.summarize()
         #readDoc and find self.evals
         AP.append(cocoEval.stats[1])
     with open("class_value_AP/{}.json".format(catStudied), 'w') as fs:
@@ -333,7 +340,7 @@ def plotAP(AP,catStudied,number_IoU_thresh = 50):
     catStudied: String describing the category of image studied
      """
     plt.figure(figsize=(18,10))
-    iou_thresholdXaxis = np.linspace(0.1,0.99,number_IoU_thresh)
+    iou_thresholdXaxis = np.linspace(0.2,0.9,number_IoU_thresh)
     #Put an arrow on the max value
     IoU_max = iou_thresholdXaxis[np.argmax(AP)]
     AP_max = AP.max()
@@ -354,7 +361,7 @@ def plotAP(AP,catStudied,number_IoU_thresh = 50):
     plt.savefig('graph_result/{}.png'.format(catStudied), bbox_inches='tight')
     plt.clf()
 
-def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh = 50,catFocus = []):
+def main(modelPath,resFilePath,cocoDir,valType,number_IoU_thresh = 50,catFocus = []):
     """
     input:
 
@@ -371,14 +378,17 @@ def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh 
 
     model = loadModel(modelPath)
     coco = loadCocoApi(dataDir=cocoDir,dataType=valType)
-    
+    all_output_dict = computeInferenceBbox(model)
     categories = getCategories(coco) if catFocus == [] else catFocus
     end = '\n'
     s = ' '
+    
     with open("string_float_iouThresh_map_pb2.pbtxt", 'w+') as f:
         for catStudied in tqdm(categories,desc="Categories Processed",leave=False):
-            img,catIds = getImgClass(catStudied,coco,nbImageStudied)
-            if len(img) == 0:
+            img,catIds = getImgClass(catStudied,coco)
+            
+            AP05,iou = getAP05(model,all_output_dict,img,resFilePath,coco,catIds,catStudied,number_IoU_thresh=number_IoU_thresh)
+            if len(AP05) == 0:
                 #No image from the given category
                 #Write it in order to know which one
                 img = Image.new('RGB', (100, 30), color = (73, 109, 137))
@@ -387,29 +397,27 @@ def main(modelPath,resFilePath,nbImageStudied,cocoDir,valType,number_IoU_thresh 
                 img.save('graph_result/{}.png'.format(catStudied))
                 out = ''
                 out += 'item' + s + '{' + end
-                out += s*2 + 'id:' + ' ' + (str(catIds[0])) + end
+                out += s*2 + 'id:' + ' ' + (str(catIds)) + end
                 out += s*2 + 'display_name:' + s + catStudied  + end
                 out += '}' + end*2
-                f.write(out)
-                continue
-            AP05,iou = getAP05(model,img,resFilePath,coco,catIds,catStudied,number_IoU_thresh=number_IoU_thresh)
-            
-            out = ''
-            out += 'item' + s + '{' + end
-            out += s*2 + 'id:' + ' ' + (str(catIds[0])) + end
-            out += s*2 + 'display_name:' + s + catStudied  + end
-            out += s*2 + 'iou_threshold:' + s + str(iou) + end
-            out += '}' + end*2
+                
+            else:
+                out = ''
+                out += 'item' + s + '{' + end
+                out += s*2 + 'id:' + ' ' + (str(catIds)) + end
+                out += s*2 + 'display_name:' + s + catStudied  + end
+                out += s*2 + 'iou_threshold:' + s + str(iou) + end
+                out += '}' + end*2
+                plotAP(AP05,catStudied,number_IoU_thresh=number_IoU_thresh)
             f.write(out)
             
-            plotAP(AP05,catStudied,number_IoU_thresh=number_IoU_thresh)
+            
 
 
 if __name__ == "__main__":
     # execute only if run as a script
     main(modelPath = "model",
         resFilePath = "cocoapi/results/iou.json",
-        nbImageStudied = float("inf"),
         cocoDir = "cocoapi",
         valType = "val2017",
         catFocus= []) 
