@@ -1,5 +1,9 @@
 __author__ = 'tsungyi'
+"""
 
+Edited by Noah Sarfati 
+
+"""
 import numpy as np
 import datetime
 import time
@@ -49,6 +53,7 @@ class COCOeval:
     #  counts     - [T,R,K,A,M] parameter dimensions (see above)
     #  precision  - [TxRxKxAxM] precision for every evaluation setting
     #  recall     - [TxKxAxM] max recall for every evaluation setting
+    #  instances  - [KxA] counts the number of instances per image
     # Note: precision and recall==-1 for settings with no gt objects.
     #
     # See also coco, mask, pycocoDemo, pycocoEvalDemo
@@ -347,6 +352,8 @@ class COCOeval:
         m_list = [m for n, m in enumerate(p.maxDets) if m in setM]
         a_list = [n for n, a in enumerate(map(lambda x: tuple(x), p.areaRng)) if a in setA]
         i_list = [n for n, i in enumerate(p.imgIds)  if i in setI]
+        instances = np.zeros((K,A))
+        
         I0 = len(_pe.imgIds)
         A0 = len(_pe.areaRng)
         # retrieve E at each category, area range, and max number of detections
@@ -372,6 +379,7 @@ class COCOeval:
                     npig = np.count_nonzero(gtIg==0 )
                     if npig == 0:
                         continue
+                    instances[k,a] = npig
                     tps = np.logical_and(               dtm,  np.logical_not(dtIg) )
                     fps = np.logical_and(np.logical_not(dtm), np.logical_not(dtIg) )
 
@@ -415,6 +423,7 @@ class COCOeval:
             'precision': precision,
             'recall':   recall,
             'scores': scores,
+            'instance':instances,
         }
         toc = time.time()
         print('DONE (t={:0.2f}s).'.format( toc-tic))
@@ -459,7 +468,7 @@ class COCOeval:
             stats = np.zeros((12,))
             stats[0] = _summarize(1)
             stats[1] = _summarize(1, iouThr=.5, maxDets=self.params.maxDets[2])
-            stats[2] = _summarize(1, iouThr=.75, maxDets=self.params.maxDets[2])
+            stats[2] = _summarize(1, iouThr=.95, maxDets=self.params.maxDets[2])
             stats[3] = _summarize(1, areaRng='small', maxDets=self.params.maxDets[2])
             stats[4] = _summarize(1, areaRng='medium', maxDets=self.params.maxDets[2])
             stats[5] = _summarize(1, areaRng='large', maxDets=self.params.maxDets[2])

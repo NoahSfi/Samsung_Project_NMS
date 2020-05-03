@@ -24,8 +24,8 @@ from object_detection.utils import ops as utils_ops
 from object_detection.core import post_processing
 from tqdm import tqdm
 from PIL import Image, ImageDraw
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
+from cocoapi.PythonAPI.pycocotools.coco import COCO
+from cocoapi.PythonAPI.pycocotools.cocoeval import COCOeval
 
 # patch tf1 into `utils.ops`
 utils_ops.tf = tf.compat.v1
@@ -295,7 +295,7 @@ def writeResJson(img,resFilePath, all_output_dict,catIds,iou_threshold):
 
 
 
-def getAP05(model,all_output_dict,img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
+def getAP05(model,all_output_dict,img,resFilePath,cocoApi,catIds,catStudied,modelPath,number_IoU_thresh = 50):
     """
     input:
         model : OD detector
@@ -326,15 +326,16 @@ def getAP05(model,all_output_dict,img,resFilePath,cocoApi,catIds,catStudied,numb
         #compared to the best one.
         cocoEval.params.maxDets = [1,10,1000]
         cocoEval.evaluate()
+        instances = cocoEval.eval["instances"]
         cocoEval.accumulate()
         cocoEval.summarize()
         #readDoc and find self.evals
         AP.append(cocoEval.stats[1])
-    with open("class_value_AP/{}.json".format(catStudied), 'w') as fs:
+    with open("{}/class_value_AP/{}.json".format(modelPath,catStudied), 'w') as fs:
         json.dump([{"iou_threshold": list(iou_thresholdXaxis),"AP[IoU:0.5]":AP}], fs, indent=1)
-    return np.array(AP),round(iou_thresholdXaxis[AP.index(max(AP))],4)
+    return np.array(AP),round(iou_thresholdXaxis[AP.index(max(AP))],4),instances
 
-def plotAP(AP,catStudied,number_IoU_thresh = 50):
+def plotAP(AP,catStudied,modelPath,number_IoU_thresh = 50):
     """
     AP: List of score AP
     catStudied: String describing the category of image studied
@@ -358,7 +359,7 @@ def plotAP(AP,catStudied,number_IoU_thresh = 50):
     plt.title('Class = {}'.format(catStudied))
     plt.xlabel('iou threshold')
     plt.ylabel('AP[IoU=0.5]')
-    plt.savefig('graph_result/{}.png'.format(catStudied), bbox_inches='tight')
+    plt.savefig('{}/graph_result/{}.png'.format(modelPath,catStudied), bbox_inches='tight')
     plt.clf()
 
 def main(modelPath,resFilePath,cocoDir,valType,number_IoU_thresh = 50,catFocus = []):
@@ -387,7 +388,11 @@ def main(modelPath,resFilePath,cocoDir,valType,number_IoU_thresh = 50,catFocus =
         for catStudied in tqdm(categories,desc="Categories Processed",leave=False):
             img,catIds = getImgClass(catStudied,coco)
             
-            AP05,iou = getAP05(model,all_output_dict,img,resFilePath,coco,catIds,catStudied,number_IoU_thresh=number_IoU_thresh)
+            AP05,iou,instances = getAP05(model,all_output_dict,img,resFilePath,coco,catIds,catStudied,modelPath,number_IoU_thresh=number_IoU_thresh)
+            print("\n")
+            print("\n"*80)
+            print(instances)
+            print("\n")
             if len(AP05) == 0:
                 #No image from the given category
                 #Write it in order to know which one
@@ -408,7 +413,7 @@ def main(modelPath,resFilePath,cocoDir,valType,number_IoU_thresh = 50,catFocus =
                 out += s*2 + 'display_name:' + s + catStudied  + end
                 out += s*2 + 'iou_threshold:' + s + str(iou) + end
                 out += '}' + end*2
-                plotAP(AP05,catStudied,number_IoU_thresh=number_IoU_thresh)
+                plotAP(AP05,catStudied,modelPath,number_IoU_thresh=number_IoU_thresh)
             f.write(out)
             
             

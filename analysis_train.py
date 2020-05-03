@@ -22,8 +22,8 @@ from object_detection.utils import ops as utils_ops
 from object_detection.core import post_processing
 from tqdm import tqdm
 from PIL import Image, ImageDraw
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
+from cocoapi.PythonAPI.pycocotools.coco import COCO
+from cocoapi.PythonAPI.pycocotools.cocoeval import COCOeval
 import random
 
 # patch tf1 into `utils.ops`
@@ -142,7 +142,7 @@ def writeResToJson(resFilePath,coco,catIds,img,iou_threshold):
         json.dump(result, fs, indent=1)
     return list(imgIds) 
 
-def getAP095(img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
+def getAP095(img,resFilePath,cocoApi,catIds,catStudied,modelPath,number_IoU_thresh = 50):
     """
     input:
         model : OD detector
@@ -157,6 +157,7 @@ def getAP095(img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
     
     iou_thresholdXaxis = np.linspace(0.2,0.9,number_IoU_thresh)
     AP = []
+    computeInstances = True
     for iou_threshold in tqdm(iou_thresholdXaxis,desc = "progressbar IoU Threshold"):
         #Create the Json result file and read it.
         imgIds = writeResToJson(resFilePath,cocoApi,catIds,img,iou_threshold)
@@ -170,15 +171,18 @@ def getAP095(img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
         #compared to the best one.
         cocoEval.params.maxDets = [1,10,1000]
         cocoEval.evaluate()
-        
+        #Need it only once
+        if computeInstances:
+            instances = cocoEval.eval["instances"]
+            computeInstances = False
         cocoEval.accumulate()
         cocoEval.summarize()
         #readDoc and find self.evals
         #modified version of pycocotools to have 3rd argument to be AP[IoU = 0.95]
         AP.append(cocoEval.stats[2])
-    with open("class_train_AP/{}.json".format(catStudied), 'w') as fs:
+    with open("{}/class_train_AP/{}.json".format(modelPath,catStudied), 'w') as fs:
         json.dump([{"iou_threshold": list(iou_thresholdXaxis),"AP[IoU:0.95]":AP}], fs, indent=1)
-    return AP
+    return AP,instances
 
 
 
@@ -202,7 +206,7 @@ def getIoU(cocoApi,catIds,resFilePath,img):
                 res_iou.append(iou)
         
     return res_iou
-def plotAP(AP,catStudied,number_IoU_thresh):
+def plotAP(AP,catStudied,number_IoU_thresh,modelPath):
     
     plt.figure(figsize=(18,10))
     iou_thresholdXaxis = np.linspace(0.2,0.9,number_IoU_thresh)
@@ -213,31 +217,36 @@ def plotAP(AP,catStudied,number_IoU_thresh):
     plt.title('Class = {}'.format(catStudied))
     plt.xlabel('iou threshold')
     plt.ylabel('AP[IoU=0.95]')
-    plt.savefig('graph_result_train/{}.png'.format(catStudied), bbox_inches='tight')
+    plt.savefig('{}/graph_result_train/{}.png'.format(modelPath,catStudied), bbox_inches='tight')
     plt.clf()
    
-def plotHistIou(ious,catStudied):
+def plotHistIou(ious,catStudied,modelPath):
     plt.figure(figsize=(18,10))
     nb_bins = 20
     plt.hist(ious,bins=nb_bins)
     plt.ylabel('Number of detections')
     plt.xlabel("IoU")
     plt.title('Class = {}'.format(catStudied))
-    plt.savefig('graph_result_train/hist_{}.png'.format(catStudied), bbox_inches='tight')
+    plt.savefig('{}/graph_result_train/hist_{}.png'.format(modelPath,catStudied), bbox_inches='tight')
     plt.clf()
     
-def main(dataType,resFilePath):
+def main(dataType,resFilePath,modelPath):
     coco = loadCocoApi(dataType=dataType)
     categories = getCategories(coco)
     for catStudied in tqdm(categories,desc="Categories Processed",leave=False):
         img,catIds = getImgClass(catStudied,coco)
-        AP = getAP095(img,resFilePath,coco,catIds,catStudied)  
+        AP,instances = getAP095(img,resFilePath,coco,catIds,catStudied,modelPath)  
+        print("\n")
+        print("\n"*80)
+        print(instances)
+        print("\n")
         ious = getIoU(coco,catIds,resFilePath,img)
-        plotHistIou(ious,catStudied)
-        plotAP(AP,catStudied,50)
+        plotHistIou(ious,catStudied,modelPath)
+        plotAP(AP,catStudied,50,modelPath)
 
         
 if __name__ == "__main__":
     # execute only if run as a script
     main(resFilePath = "cocoapi/results/train_res.json",
-        dataType = "train2017") 
+        dataType = "train2017",
+        modelPath = "model") 
