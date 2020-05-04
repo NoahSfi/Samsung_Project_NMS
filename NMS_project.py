@@ -334,10 +334,11 @@ def getAP05(model,all_output_dict,img,resFilePath,cocoApi,catIds,catStudied,mode
         cocoEval.params.maxDets = [1,10,1000]
         cocoEval.evaluate()
         number_FN = 0
+        instances_non_ignored = 0
         for evalImg in cocoEval.evalImgs:
             number_FN += sum(evalImg["FN"])
+            instances_non_ignored += sum(np.logical_not(evalImg['gtIgnore']))
         FN.append(int(number_FN))
-        
         cocoEval.accumulate()
         if computeInstances:
             #need all instances, don't mind of area range, if need range check cocoeval.py for doc
@@ -348,7 +349,7 @@ def getAP05(model,all_output_dict,img,resFilePath,cocoApi,catIds,catStudied,mode
         #readDoc and find self.evals
         AP.append(cocoEval.stats[1])
     with open("{}/class_value_AP/{}.json".format(modelPath,catStudied), 'w') as fs:
-        json.dump({"iou threshold": list(iou_thresholdXaxis),"AP[IoU:0.75]":AP,"False Negatives":FN,"number of instances":int(instances)}, fs, indent=1)
+        json.dump({"iou threshold": list(iou_thresholdXaxis),"AP[IoU:0.5]":AP,"False Negatives":FN,"number of instances":int(instances),"instances_not_ignored":int(instances_non_ignored)}, fs, indent=1)
 
     return np.array(AP),round(iou_thresholdXaxis[AP.index(max(AP))],4)
 

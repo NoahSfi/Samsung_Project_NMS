@@ -174,8 +174,11 @@ def getAP095(img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
         cocoEval.params.maxDets = [1,10,1000]
         cocoEval.evaluate()
         number_FN = 0
+        instances_non_ignored = 0
         for evalImg in cocoEval.evalImgs:
             number_FN += sum(evalImg["FN"])
+            
+            instances_non_ignored += sum(np.logical_not(evalImg['gtIgnore']))
             
         FN.append(int(number_FN))
         #Need it only once
@@ -190,7 +193,7 @@ def getAP095(img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
         #modified version of pycocotools to have 3rd argument to be AP[IoU = 0.95]
         AP.append(cocoEval.stats[2])
     with open("cocoapi/results/class_train_AP/{}.json".format(catStudied), 'w') as fs:
-        json.dump({"iou threshold": list(iou_thresholdXaxis),"AP[IoU:0.95]":AP,"False Negatives":FN,"number of instances":int(instances)}, fs, indent=1)
+        json.dump({"iou threshold": list(iou_thresholdXaxis),"AP[IoU:0.95]":AP,"False Negatives":FN,"number of instances":int(instances),"instances_not_ignored":int(instances_non_ignored)}, fs, indent=1)
     return AP
 
 
