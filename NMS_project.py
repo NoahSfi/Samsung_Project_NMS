@@ -127,7 +127,11 @@ def run_inference_for_single_image(model, image):
     
     key_of_interest = ['detection_scores','detection_classes','detection_boxes']
     output_dict = { key: list(output_dict[key]) for key in key_of_interest}
-    output_dict["num_detections"] = num_detections
+    output_dict["num_detections"] = int(num_detections)
+    output_dict['detection_boxes'] = [[float(box) for box in output_dict['detection_boxes'][i]] for i in range(len(output_dict['detection_scores']))]
+    output_dict['detection_scores'] = [float(box) for box in output_dict['detection_scores']]
+    output_dict['detection_classes'] = [float(box) for box in output_dict['detection_classes']]
+
   
     if len(output_dict["detection_boxes"]) == 0:
         return None
@@ -271,10 +275,11 @@ def writeResJson(img,resFilePath, all_output_dict,catIds,iou_threshold):
         #[ymin,xmin,ymax,xmax] normalized
         
         final_classes,final_scores,final_boxes = computeNMS(output_dict,iou_threshold=iou_threshold)
-        if not final_classes: 
-            continue
         imgId = img[i]["id"]
         imgIds.add(imgId)
+        if not final_classes: 
+            continue
+        
         for j in range(len(final_classes)):
             
             #ex : {"image_id":42,"category_id":18,"bbox":[258.15,41.29,348.26,243.78],"score":0.236}
@@ -291,6 +296,7 @@ def writeResJson(img,resFilePath, all_output_dict,catIds,iou_threshold):
             result.append(properties)
     with open(resFilePath, 'w+') as fs:
         json.dump(result, fs, indent=1)
+    
     return list(imgIds)
 
 
@@ -310,7 +316,8 @@ def getAP05(model,all_output_dict,img,resFilePath,cocoApi,catIds,catStudied,mode
     
     iou_thresholdXaxis = np.linspace(0.2,0.9,number_IoU_thresh)
     AP = []
-    
+    FN = []
+    computeInstances = True
     for iou in tqdm(iou_thresholdXaxis,desc = "progressbar IoU Threshold"):
         #Create the Json result file and read it.
         imgIds = writeResJson(img,resFilePath,all_output_dict,catIds,iou_threshold=float(iou))
@@ -326,14 +333,24 @@ def getAP05(model,all_output_dict,img,resFilePath,cocoApi,catIds,catStudied,mode
         #compared to the best one.
         cocoEval.params.maxDets = [1,10,1000]
         cocoEval.evaluate()
-        instances = cocoEval.eval["instances"]
+        number_FN = 0
+        for evalImg in cocoEval.evalImgs:
+            number_FN += sum(evalImg["FN"])
+        FN.append(int(number_FN))
+        
         cocoEval.accumulate()
+        if computeInstances:
+            #need all instances, don't mind of area range, if need range check cocoeval.py for doc
+            # here first row because we do that per category and K = 1 and first column because all images
+            instances = cocoEval.eval["instances"][0][0] 
+            computeInstances = False
         cocoEval.summarize()
         #readDoc and find self.evals
         AP.append(cocoEval.stats[1])
     with open("{}/class_value_AP/{}.json".format(modelPath,catStudied), 'w') as fs:
-        json.dump([{"iou_threshold": list(iou_thresholdXaxis),"AP[IoU:0.5]":AP}], fs, indent=1)
-    return np.array(AP),round(iou_thresholdXaxis[AP.index(max(AP))],4),instances
+        json.dump({"iou threshold": list(iou_thresholdXaxis),"AP[IoU:0.75]":AP,"False Negatives":FN,"number of instances":int(instances)}, fs, indent=1)
+
+    return np.array(AP),round(iou_thresholdXaxis[AP.index(max(AP))],4)
 
 def plotAP(AP,catStudied,modelPath,number_IoU_thresh = 50):
     """
@@ -379,7 +396,10 @@ def main(modelPath,resFilePath,cocoDir,valType,number_IoU_thresh = 50,catFocus =
 
     model = loadModel(modelPath)
     coco = loadCocoApi(dataDir=cocoDir,dataType=valType)
-    all_output_dict = computeInferenceBbox(model)
+    # all_output_dict = computeInferenceBbox(model)
+    with open("{}/all_output_dict.json".format(modelPath), 'r') as fs:
+        all_output_dict = json.load(fs)
+
     categories = getCategories(coco) if catFocus == [] else catFocus
     end = '\n'
     s = ' '
@@ -388,11 +408,8 @@ def main(modelPath,resFilePath,cocoDir,valType,number_IoU_thresh = 50,catFocus =
         for catStudied in tqdm(categories,desc="Categories Processed",leave=False):
             img,catIds = getImgClass(catStudied,coco)
             
-            AP05,iou,instances = getAP05(model,all_output_dict,img,resFilePath,coco,catIds,catStudied,modelPath,number_IoU_thresh=number_IoU_thresh)
-            print("\n")
-            print("\n"*80)
-            print(instances)
-            print("\n")
+            AP05,iou = getAP05(model,all_output_dict,img,resFilePath,coco,catIds,catStudied,modelPath,number_IoU_thresh=number_IoU_thresh)
+            
             if len(AP05) == 0:
                 #No image from the given category
                 #Write it in order to know which one
@@ -425,7 +442,7 @@ if __name__ == "__main__":
         resFilePath = "cocoapi/results/iou.json",
         cocoDir = "cocoapi",
         valType = "val2017",
-        catFocus= []) 
+        catFocus= ['bicycle']) 
 
 
 

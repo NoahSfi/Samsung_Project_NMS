@@ -28,7 +28,7 @@ class COCOeval:
     #  catIds     - [all] K cat ids to use for evaluation
     #  iouThrs    - [.5:.05:.95] T=10 IoU thresholds for evaluation
     #  recThrs    - [0:.01:1] R=101 recall thresholds for evaluation
-    #  areaRng    - [...] A=4 object area ranges for evaluation
+    #  areaRng    - [...] A=4 object area ranges for evaluation [all,small,medium,large]
     #  maxDets    - [1 10 100] M=3 thresholds on max detections per image
     #  iouType    - ['segm'] set iouType to 'segm', 'bbox' or 'keypoints'
     #  iouType replaced the now DEPRECATED useSegm parameter.
@@ -161,6 +161,7 @@ class COCOeval:
                  for areaRng in p.areaRng
                  for imgId in p.imgIds
              ]
+        
         self._paramsEval = copy.deepcopy(self.params)
         toc = time.time()
         print('DONE (t={:0.2f}s).'.format(toc-tic))
@@ -303,6 +304,8 @@ class COCOeval:
         a = np.array([d['area']<aRng[0] or d['area']>aRng[1] for d in dt]).reshape((1, len(dt)))
         dtIg = np.logical_or(dtIg, np.logical_and(dtm==0, np.repeat(a,T,0)))
         # store results for given image and category
+        dtFN = np.logical_and(np.logical_not(gtIg),np.logical_not(gtm[0,:]))
+       
         return {
                 'image_id':     imgId,
                 'category_id':  catId,
@@ -315,6 +318,7 @@ class COCOeval:
                 'dtScores':     [d['score'] for d in dt],
                 'gtIgnore':     gtIg,
                 'dtIgnore':     dtIg,
+                'FN':           dtFN,
             }
 
     def accumulate(self, p = None):
@@ -423,7 +427,7 @@ class COCOeval:
             'precision': precision,
             'recall':   recall,
             'scores': scores,
-            'instance':instances,
+            'instances':instances,
         }
         toc = time.time()
         print('DONE (t={:0.2f}s).'.format( toc-tic))
@@ -468,7 +472,7 @@ class COCOeval:
             stats = np.zeros((12,))
             stats[0] = _summarize(1)
             stats[1] = _summarize(1, iouThr=.5, maxDets=self.params.maxDets[2])
-            stats[2] = _summarize(1, iouThr=.95, maxDets=self.params.maxDets[2])
+            stats[2] = _summarize(1, iouThr=.75, maxDets=self.params.maxDets[2])
             stats[3] = _summarize(1, areaRng='small', maxDets=self.params.maxDets[2])
             stats[4] = _summarize(1, areaRng='medium', maxDets=self.params.maxDets[2])
             stats[5] = _summarize(1, areaRng='large', maxDets=self.params.maxDets[2])
