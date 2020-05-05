@@ -380,7 +380,10 @@ class COCOeval:
                     dtm  = np.concatenate([e['dtMatches'][:,0:maxDet] for e in E], axis=1)[:,inds]
                     dtIg = np.concatenate([e['dtIgnore'][:,0:maxDet]  for e in E], axis=1)[:,inds]
                     gtIg = np.concatenate([e['gtIgnore'] for e in E])
-                    npig = np.count_nonzero(gtIg==0 )
+                    
+                    
+                    npig = np.count_nonzero(gtIg==0)
+                    
                     if npig == 0:
                         continue
                     instances[k,a] = npig
@@ -420,6 +423,9 @@ class COCOeval:
                             pass
                         precision[t,:,k,a,m] = np.array(q)
                         scores[t,:,k,a,m] = np.array(ss)
+                print(gtIg)
+                print(npig)
+                
         self.eval = {
             'params': p,
             'counts': [T, R, K, A, M],
