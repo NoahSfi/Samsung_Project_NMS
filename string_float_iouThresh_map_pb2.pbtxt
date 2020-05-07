@@ -1,6 +1,6 @@
 item {
   id: 2
   display_name: bicycle
-  iou_threshold: 0.4714
+  iou_threshold: 0.2286
 }
 

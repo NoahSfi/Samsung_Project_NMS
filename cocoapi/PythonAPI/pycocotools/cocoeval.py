@@ -10,6 +10,7 @@ import time
 from collections import defaultdict
 from . import mask as maskUtils
 import copy
+import json
 
 class COCOeval:
     # Interface for evaluating detection on the Microsoft COCO dataset.
@@ -321,7 +322,7 @@ class COCOeval:
                 'FN':           dtFN,
             }
 
-    def accumulate(self, p = None):
+    def accumulate(self,iou_threshold, p = None,category='bicycle',withTrain = False):
         '''
         Accumulate per image evaluation results and store the result in self.eval
         :param p: input params for evaluation
@@ -361,6 +362,16 @@ class COCOeval:
         I0 = len(_pe.imgIds)
         A0 = len(_pe.areaRng)
         # retrieve E at each category, area range, and max number of detections
+        
+        """If one wants to add MRnms_train and remove MRerr"""
+        if withTrain:
+            with open("cocoapi/results/validation/{}.json".format(category),"r") as fs:
+                nmserror = json.load(fs)
+            with open("cocoapi/results/train/{}.json".format(category),"r") as fs:
+                trainData = json.load(fs)
+                npig_train = trainData['instances_not_ignored']
+                
+                
         for k, k0 in enumerate(k_list):
             Nk = k0*A0*I0
             for a, a0 in enumerate(a_list):
@@ -388,15 +399,35 @@ class COCOeval:
                         continue
                     instances[k,a] = npig
                     tps = np.logical_and(               dtm,  np.logical_not(dtIg) )
+                    
                     fps = np.logical_and(np.logical_not(dtm), np.logical_not(dtIg) )
 
                     tp_sum = np.cumsum(tps, axis=1).astype(dtype=np.float)
                     fp_sum = np.cumsum(fps, axis=1).astype(dtype=np.float)
+                    
+                    
+                    
+                    if withTrain:
+                        for idx,iou in enumerate(nmserror['iou threshold']):
+                            if abs(iou-iou_threshold)<10e-4:
+                                pos = idx
+                        fn_nms_validation = nmserror['False Negatives'][pos]
+                        fn_nms_train = trainData['False Negatives'][pos]
+                        
+                    
+                    
                     for t, (tp, fp) in enumerate(zip(tp_sum, fp_sum)):
                         tp = np.array(tp)
                         fp = np.array(fp)
                         nd = len(tp)
-                        rc = tp / npig
+                        
+                        if withTrain:
+                            fn = npig - tp - fn_nms_validation 
+                            rc = 1 - (fn / npig + fn_nms_train/npig_train)
+                        else:
+                            rc = tp/npig
+                        
+                            
                         pr = tp / (fp+tp+np.spacing(1))
                         q  = np.zeros((R,))
                         ss = np.zeros((R,))
@@ -423,9 +454,8 @@ class COCOeval:
                             pass
                         precision[t,:,k,a,m] = np.array(q)
                         scores[t,:,k,a,m] = np.array(ss)
-                print(gtIg)
-                print(npig)
-                
+                    
+        
         self.eval = {
             'params': p,
             'counts': [T, R, K, A, M],

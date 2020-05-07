@@ -32,7 +32,7 @@ utils_ops.tf = tf.compat.v1
 tf.gfile = tf.io.gfile
 
 ###############################################################################
-from NMS_project import loadCocoApi,getCategories,getImgClass
+from analysis_validation import loadCocoApi,getCategories,getImgClass
 
 
 
@@ -182,7 +182,7 @@ def getAP095(img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
             
         FN.append(int(number_FN))
         #Need it only once
-        cocoEval.accumulate()
+        cocoEval.accumulate(iou_threshold,withTrain=False)
         if computeInstances:
             #need all instances, don't mind of area range, if need range check cocoeval.py for doc
             # here first row because we do that per category and K = 1 and first column because all images
@@ -192,7 +192,7 @@ def getAP095(img,resFilePath,cocoApi,catIds,catStudied,number_IoU_thresh = 50):
         #readDoc and find self.evals
         #modified version of pycocotools to have 3rd argument to be AP[IoU = 0.95]
         AP.append(cocoEval.stats[2])
-    with open("cocoapi/results/class_train_AP/{}.json".format(catStudied), 'w') as fs:
+    with open(DIRECTORY + PATH_RESULT + "{}.json".format(catStudied), 'w') as fs:
         json.dump({"iou threshold": list(iou_thresholdXaxis),"AP[IoU:0.95]":AP,"False Negatives":FN,"number of instances":int(instances),"instances_not_ignored":int(instances_non_ignored)}, fs, indent=1)
     return AP
 
@@ -229,7 +229,7 @@ def plotAP(AP,catStudied,number_IoU_thresh):
     plt.title('Class = {}'.format(catStudied))
     plt.xlabel('iou threshold')
     plt.ylabel('AP[IoU=0.95]')
-    plt.savefig('cocoapi/results/graph_result_train/graph_{}.png'.format(catStudied), bbox_inches='tight')
+    plt.savefig(DIRECTORY + PATH_RESULT + 'graph/graph_{}.png'.format(catStudied), bbox_inches='tight')
     plt.clf()
    
 def plotHistIou(ious,catStudied):
@@ -239,7 +239,7 @@ def plotHistIou(ious,catStudied):
     plt.ylabel('Number of detections')
     plt.xlabel("IoU")
     plt.title('Class = {}'.format(catStudied))
-    plt.savefig('cocoapi/results/graph_result_train/hist_{}.png'.format(catStudied), bbox_inches='tight')
+    plt.savefig(DIRECTORY + PATH_RESULT + 'graph/hist_{}.png'.format(catStudied), bbox_inches='tight')
     plt.clf()
     
 def main(dataType,resFilePath):
@@ -256,6 +256,9 @@ def main(dataType,resFilePath):
         plotAP(AP,catStudied,50)
         
     
+DIRECTORY =  "cocoapi/results/"   
+PATH_RESULT =  "train/"
+#or "validation"
         
 if __name__ == "__main__":
     # execute only if run as a script
