@@ -470,7 +470,7 @@ if __name__ == "__main__":
          resFilePath="cocoapi/results/iou.json",
          cocoDir="cocoapi",
          valType="val2017",
-         catFocus=['bicycle'])
+         catFocus=['bus'])
 
 
 """Choose your model"""

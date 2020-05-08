@@ -367,6 +367,7 @@ class COCOeval:
         if withTrain:
             with open("cocoapi/results/validation/{}.json".format(category),"r") as fs:
                 nmserror = json.load(fs)
+                npig_val = nmserror['instances_not_ignored']
             with open("cocoapi/results/train/{}.json".format(category),"r") as fs:
                 trainData = json.load(fs)
                 npig_train = trainData['instances_not_ignored']
@@ -422,8 +423,8 @@ class COCOeval:
                         nd = len(tp)
                         
                         if withTrain:
-                            fn = npig - tp - fn_nms_validation 
-                            rc = 1 - (fn / npig + fn_nms_train/npig_train)
+                            fn = npig - tp 
+                            rc = 1 - (fn / npig - fn_nms_validation/npig_val +  fn_nms_train/npig_train)
                         else:
                             rc = tp/npig
                         

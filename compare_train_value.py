@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 modelPath = "ssd_mobilenet_v1_fpn/"
 dataDir = "validation_AP/"
 trainDataDir = 'cocoapi/results/train/'
-test = 'bicycle.json'
+test = 'bus.json'
 def openJsonData(file):
     
     with open(file,"r") as fs:

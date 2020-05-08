@@ -245,7 +245,8 @@ def plotHistIou(ious,catStudied):
 def main(dataType,resFilePath):
     coco = loadCocoApi(dataType=dataType)
     categories = getCategories(coco)
-    categories = ["bicycle"]
+    # print(categories)
+    
     
     for catStudied in tqdm(categories,desc="Categories Processed",leave=False):
         img,catIds = getImgClass(catStudied,coco)
