@@ -247,7 +247,6 @@ def main(dataType,resFilePath):
     categories = getCategories(coco)
     # print(categories)
     
-    
     for catStudied in tqdm(categories,desc="Categories Processed",leave=False):
         img,catIds = getImgClass(catStudied,coco)
         AP = getAP095(img,resFilePath,coco,catIds,catStudied,number_IoU_thresh=50)  

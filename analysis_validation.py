@@ -28,6 +28,7 @@ from tqdm import tqdm
 from PIL import Image, ImageDraw
 from cocoapi.PythonAPI.pycocotools.coco import COCO
 from cocoapi.PythonAPI.pycocotools.cocoeval import COCOeval
+import os
 utils_ops.tf = tf.compat.v1
 # Patch the location of gfile
 tf.gfile = tf.io.gfile
@@ -335,9 +336,10 @@ def getAP05(model, all_output_dict, img, resFilePath, cocoApi, catIds, catStudie
         # Create the Json result file and read it.
         imgIds = writeResJson(img, resFilePath, all_output_dict,
                               catIds, iou_threshold=float(iou))
-        if len(imgIds) == 0:
-            return np.array([]), None
-        cocoDt = cocoApi.loadRes(resFilePath)
+        try:
+            cocoDt = cocoApi.loadRes(resFilePath)
+        except:
+            return 1
         cocoEval = COCOeval(cocoApi, cocoDt, 'bbox')
         cocoEval.params.imgIds = imgIds
         cocoEval.params.catIds = catIds
@@ -348,61 +350,78 @@ def getAP05(model, all_output_dict, img, resFilePath, cocoApi, catIds, catStudie
         cocoEval.params.maxDets = [1, 10, 1000]
         cocoEval.evaluate()
         number_FN = 0
-        instances_non_ignored = 0
+        if computeInstances:
+            instances_non_ignored = 0
         for evalImg in cocoEval.evalImgs:
             number_FN += sum(evalImg["FN"])
-            instances_non_ignored += sum(np.logical_not(evalImg['gtIgnore']))
+            if computeInstances:
+                instances_non_ignored += sum(np.logical_not(evalImg['gtIgnore']))
+        computeInstances = False
         FN.append(int(number_FN))
         cocoEval.accumulate(iou,withTrain=WITH_TRAIN,category=catStudied)
-        if computeInstances:
-            # need all instances, don't mind of area range, if need range check cocoeval.py for doc
-            # here first row because we do that per category and K = 1 and first column because all images
-            instances = [int(cocoEval.eval["instances"][0][i])
-                         for i in range(4)]
-            computeInstances = False
+        
         cocoEval.summarize()
         # readDoc and find self.evals
         AP.append(cocoEval.stats[1])
+        precisions = cocoEval.s.reshape((101,))
+        if GRAPH_PRECISION_TO_RECALL:
+            precisionToRecall(precisions,round(iou,3),catStudied,modelPath)
+    
+    general_folder = "{}/AP[IoU=0.5]/".format(modelPath)
+    if not os.path.isdir(general_folder):
+        os.mkdir(general_folder)
+    
     if not WITH_TRAIN:
-        with open("{}/validation_AP/{}.json".format(modelPath, catStudied), 'w') as fs:
-            json.dump({"iou threshold": list(iou_thresholdXaxis), "AP[IoU:0.5]": AP, "False Negatives": FN,
-                    "number of instances": instances, "instances_not_ignored": int(instances_non_ignored)}, fs, indent=1)
+        general_folder += "validation/" 
     else:
-        with open("{}/validation_train/{}.json".format(modelPath, catStudied), 'w') as fs:
+        general_folder += "validation_train/"
+    if not os.path.isdir(general_folder):
+        os.mkdir(general_folder)
+        
+    with open(general_folder + "{}.json".format(catStudied), 'w') as fs:
             json.dump({"iou threshold": list(iou_thresholdXaxis), "AP[IoU:0.5]": AP, "False Negatives": FN,
-                    "number of instances": instances, "instances_not_ignored": int(instances_non_ignored)}, fs, indent=1)
+                    "number of instances": int(instances_non_ignored) }, fs, indent=1)
 
-    return np.array(AP), round(iou_thresholdXaxis[AP.index(max(AP))], 4)
-
-
-def plotAP(AP, catStudied, modelPath, number_IoU_thresh=50):
+    return 0
+def precisionToRecall(precision,iouThreshold, catStudied, modelPath):
     """
-    AP: List of score AP
+    precision -[all] P = 101. Precision for each recall
     catStudied: String describing the category of image studied
+    modelPath: path to the model to save the graph
      """
     plt.figure(figsize=(18, 10))
-    iou_thresholdXaxis = np.linspace(0.2, 0.9, number_IoU_thresh)
-    # Put an arrow on the max value
-    IoU_max = iou_thresholdXaxis[np.argmax(AP)]
-    AP_max = AP.max()
-    text = "Best IoU_Thresh ={:.3f}".format(IoU_max)
-    bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
-    arrowprops = dict(
-        arrowstyle="->", connectionstyle="angle,angleA=0,angleB=60")
-    kw = dict(xycoords='data', textcoords="axes fraction",
-              arrowprops=arrowprops, bbox=bbox_props, ha="right", va="top")
-    plt.annotate(text, xy=(IoU_max, AP_max), xytext=(0.94, 0.96), **kw)
-
+    recall = np.linspace(0, 1, 101)
+        
     # Plot the data
-    plt.plot(iou_thresholdXaxis, AP, label='AP[IoU=0.5]')
+    plt.plot(recall, precision, label='Precision to recall for IoU = {}'.format(iouThreshold))
     # Add a legend
     plt.legend(loc="lower left")
     plt.title('Class = {}'.format(catStudied))
-    plt.xlabel('iou threshold')
-    plt.ylabel('AP[IoU=0.5]')
-    plt.savefig('{}/graph_result/{}.png'.format(modelPath,
-                                                catStudied), bbox_inches='tight')
-    plt.clf()
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    
+    #Create correct folder
+    general_folder =  "{}/precision_to_recall/".format(modelPath)
+    if not os.path.isdir(general_folder):
+        os.mkdir(general_folder)
+    
+    if WITH_TRAIN:
+        general_folder = "{}/precision_to_recall/train_MR/".format(modelPath)
+    else:
+        general_folder = "{}/precision_to_recall/validation_MR/".format(modelPath)
+        
+    if not os.path.isdir(general_folder):
+        os.mkdir(general_folder)
+        
+    category_folder = general_folder + catStudied.replace(' ','_')
+    if not os.path.isdir(category_folder):
+        os.mkdir(category_folder)
+        
+    plt.savefig(category_folder + '/iou={}.png'.format(iouThreshold), bbox_inches='tight')
+    
+        
+    # plt.clf()
+    plt.close('all')
 
 
 def main(modelPath, resFilePath, cocoDir, valType, number_IoU_thresh=50, catFocus=[]):
@@ -422,58 +441,49 @@ def main(modelPath, resFilePath, cocoDir, valType, number_IoU_thresh=50, catFocu
 
     model = loadModel(modelPath)
     coco = loadCocoApi(dataDir=cocoDir, dataType=valType)
-    # all_output_dict = computeInferenceBbox(model)
-    # with open("{}/all_output_dict.json".format(modelPath), 'w') as fs:
-    #     json.dump(all_output_dict, fs, indent=1)
-    with open("{}/all_output_dict.json".format(modelPath), 'r') as fs:
-        all_output_dict = json.load(fs)
+    is_all_output_dict = os.path.isfile("{}/all_output_dict.json".format(modelPath))
+    if not is_all_output_dict:
+        print("Compute all the inferences boxes in the validation set for the model {} and save it for faster computations of you reuse the interface in {}/all_output_dict.json".format(modelPath,modelPath))
+        all_output_dict = computeInferenceBbox(model)
+        with open("{}/all_output_dict.json".format(modelPath), 'w') as fs:
+            json.dump(all_output_dict, fs, indent=1)
+    else:
+        with open("{}/all_output_dict.json".format(modelPath), 'r') as fs:
+            all_output_dict = json.load(fs)
 
     categories = getCategories(coco) if catFocus == [] else catFocus
-    end = '\n'
-    s = ' '
+    for catStudied in tqdm(categories, desc="Categories Processed", leave=False):
+        img, catIds = getImgClass(catStudied, coco)
 
-    with open("string_float_iouThresh_map_pb2.pbtxt", 'w+') as f:
-        for catStudied in tqdm(categories, desc="Categories Processed", leave=False):
-            img, catIds = getImgClass(catStudied, coco)
+        getAP05(model, all_output_dict, img, resFilePath, coco,
+                            catIds, catStudied, modelPath, number_IoU_thresh=number_IoU_thresh)
 
-            AP05, iou = getAP05(model, all_output_dict, img, resFilePath, coco,
-                                catIds, catStudied, modelPath, number_IoU_thresh=number_IoU_thresh)
+        
+            
 
-            if len(AP05) == 0:
-                # No image from the given category
-                # Write it in order to know which one
-                img = Image.new('RGB', (100, 30), color=(73, 109, 137))
-                d = ImageDraw.Draw(img)
-                d.text((10, 10), "No Data to study", fill=(255, 255, 0))
-                img.save('graph_result/{}.png'.format(catStudied))
-                out = ''
-                out += 'item' + s + '{' + end
-                out += s*2 + 'id:' + ' ' + (str(catIds)) + end
-                out += s*2 + 'display_name:' + s + catStudied + end
-                out += '}' + end*2
+WITH_TRAIN = False
 
-            else:
-                out = ''
-                out += 'item' + s + '{' + end
-                out += s*2 + 'id:' + ' ' + (str(catIds)) + end
-                out += s*2 + 'display_name:' + s + catStudied + end
-                out += s*2 + 'iou_threshold:' + s + str(iou) + end
-                out += '}' + end*2
-                plotAP(AP05, catStudied, modelPath,
-                       number_IoU_thresh=number_IoU_thresh)
-            f.write(out)
+#Chose if you want to graph the precision to recall if you want more precision
+GRAPH_PRECISION_TO_RECALL = True
 
-WITH_TRAIN = True
 if __name__ == "__main__":
     # execute only if run as a script
-    main(modelPath="ssd_mobilenet_v1_fpn",
-         resFilePath="cocoapi/results/iou.json",
-         cocoDir="cocoapi",
-         valType="val2017",
-         catFocus=['bus'])
+    
+    #Put other model, be aware that the script will insert results in the model folder
+    models = [
+        "ssd_inception_v2",
+        "ssd_mobilenet_v1_fpn",
+        "ssd_mobilenet_v1",
+        ]
+    for modelPath in models:
+        for train in [False,True]:
+            
+            WITH_TRAIN = train
+            main(modelPath=modelPath,
+                resFilePath="cocoapi/results/iou.json",
+                cocoDir="cocoapi",
+                valType="val2017",
+                catFocus=[])
 
 
-"""Choose your model"""
-# "ssd_inception_v2"
-# "ssd_mobilenet_v1_fpn"
-# "ssd_mobilenet_v1"
+

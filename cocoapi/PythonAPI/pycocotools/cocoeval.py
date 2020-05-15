@@ -492,6 +492,8 @@ class COCOeval:
                     t = np.where(iouThr == p.iouThrs)[0]
                     s = s[t]
                 s = s[:,:,:,aind,mind]
+                if iouThr == 0.5:
+                    self.s = s
             else:
                 # dimension of recall: [TxKxAxM]
                 s = self.eval['recall']
@@ -503,7 +505,8 @@ class COCOeval:
                 mean_s = -1
             else:
                 mean_s = np.mean(s[s>-1])
-            print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
+            # print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
+            
             return mean_s
         def _summarizeDets():
             stats = np.zeros((12,))
