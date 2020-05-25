@@ -52,13 +52,16 @@ class GroundTruthFN(nmsAnalysis):
         self.categories = self.getCategories() if catFocus is None else catFocus
 
         # All the variable that will change throughout the study and will be needed in many functions
-        self.study = {
+        self._study = {
             "img": dict(),
             "catId": int(),
             "catStudied": str(),
             "all_output_dict": dict(),
             "iouThreshold": float(),
         }
+        
+        if not os.path.isdir(self.DIRECTORY):
+            os.mkdir(self.DIRECTORY)
 
         if not os.path.isdir(self.DIRECTORY + self.resultPath):
             os.mkdir(self.DIRECTORY + self.resultPath)
@@ -70,7 +73,7 @@ class GroundTruthFN(nmsAnalysis):
         output:
             List of the form [xmin,ymin,xmax,ymax]  describing each bbox of the given image_Id
         """
-        annIds = self.coco.getAnnIds(imgIds=image_Id, catIds=self.study["catId"], iscrowd=None)
+        annIds = self.coco.getAnnIds(imgIds=image_Id, catIds=self._study["catId"], iscrowd=None)
         anns = self.coco.loadAnns(annIds)
         bbox = list()
         for annotation in anns:
@@ -138,7 +141,7 @@ class GroundTruthFN(nmsAnalysis):
             #decreasing order to be able to remove object by their indexes
             for i in range(len(bbox_to_study)-1,-1,-1):
                 iou = self.IoU(bboxToCompare,bbox_to_study[i])
-                if iou > self.study["iouThreshold"]:
+                if iou > self._study["iouThreshold"]:
                     del bbox_to_study[i]
         return finalBbox
 
@@ -146,7 +149,7 @@ class GroundTruthFN(nmsAnalysis):
     def writeResToJson(self,newFile = True):
         result = []
         imgIds = set() #set to avoid repetition
-        for image in self.study["img"]:
+        for image in self._study["img"]:
             image_Id = image["id"]
             imgIds.add(image_Id)
             bbox = self.getBbox(image_Id)
@@ -155,7 +158,7 @@ class GroundTruthFN(nmsAnalysis):
                 #ex : {"image_id":42,"category_id":18,"bbox":[258.15,41.29,348.26,243.78],"score":0.236}
                 properties = {}
                 #json format doesnt support int64
-                properties["category_id"] = int(self.study["catId"])
+                properties["category_id"] = int(self._study["catId"])
                 properties["image_id"] = int(image_Id)
                 
                 
@@ -194,13 +197,13 @@ class GroundTruthFN(nmsAnalysis):
         AP = list()
         FN = list()
         for iouThreshold in tqdm(self.iou_thresholdXaxis,desc = "progressbar IoU Threshold"):
-            self.study["iouThreshold"] = iouThreshold
+            self._study["iouThreshold"] = iouThreshold
             #Create the Json result file and read it.
             imgIds = self.writeResToJson()
             cocoDt= self.coco.loadRes(self.resFilePath)
             cocoEval = COCOeval(self.coco,cocoDt,'bbox')
             cocoEval.params.imgIds  = imgIds
-            cocoEval.params.catIds  = self.study["catId"]
+            cocoEval.params.catIds  = self._study["catId"]
             #Here we increase the maxDet to 1000 (same as in model config file)
             #Because we want to optimize the nms that is normally in charge of dealing with
             #bbox that detects the same object twice or detection that are not very precise
@@ -220,7 +223,7 @@ class GroundTruthFN(nmsAnalysis):
             #readDoc and find self.evals
             #modified version of pycocotools to have 3rd argument to be AP[IoU = 0.95]
             AP.append(cocoEval.stats[2])
-        with open(self.DIRECTORY + self.resultPath+ "{}.json".format(self.study["catStudied"]), 'w') as fs:
+        with open(self.DIRECTORY + self.resultPath+ "{}.json".format(self._study["catStudied"]), 'w') as fs:
             json.dump({"iou threshold": list(self.iou_thresholdXaxis),"AP[IoU:0.95]":AP,"False Negatives":FN,"number of instances":int(instances_non_ignored)}, fs, indent=1)
         return AP
 
@@ -229,12 +232,12 @@ class GroundTruthFN(nmsAnalysis):
     def getIoU(self):
         
         res_iou = list()
-        self.study["iouThreshold"] = 1
+        self._study["iouThreshold"] = 1
         imgIds = self.writeResToJson()
         cocoDt=self.coco.loadRes(self.resFilePath)
         cocoEval = COCOeval(self.coco,cocoDt,'bbox')
         cocoEval.params.imgIds  = imgIds
-        cocoEval.params.catIds  = self.study["catId"]
+        cocoEval.params.catIds  = self._study["catId"]
         #Here we increase the maxDet to 1000 (same as in model config file)
         #Because we want to optimize the nms that is normally in charge of dealing with
         #bbox that detects the same object twice or detection that are not very precise
@@ -266,23 +269,19 @@ class GroundTruthFN(nmsAnalysis):
         plt.hist(ious,bins=nb_bins)
         plt.ylabel('Number of detections')
         plt.xlabel("IoU")
-        plt.title('Class = {}'.format(self.study["catStudied"]))
-        plt.savefig(self.DIRECTORY + self.resultPath+ 'graph/hist_{}.png'.format(self.study["catStudied"]), bbox_inches='tight')
+        plt.title('Class = {}'.format(self._study["catStudied"]))
+        plt.savefig(self.DIRECTORY + self.resultPath+ 'graph/hist_{}.png'.format(self._study["catStudied"]), bbox_inches='tight')
         plt.clf()
         
     def runAnalysis(self):
         
         print("Analysing {} ...".format(self.dataType))
         for catStudied in tqdm(self.categories,desc="Categories Processed",leave=False):
-            self.study["catStudied"] = catStudied
-            self.getImgClass()
+            self._study["catStudied"] = catStudied
+            self.getImgClass(catStudied)
             AP = self.getClassAP()  
             ious = self.getIoU()
             if not os.path.isdir(self.DIRECTORY + self.resultPath + "graph/"):
                 os.mkdir(self.DIRECTORY + self.resultPath + "graph/")
             self.plotHistIou(ious)
             self.plotAP(AP,catStudied,50)
-
-
-test = GroundTruthFN(catFocus=["bicycle"])
-test.runAnalysis()

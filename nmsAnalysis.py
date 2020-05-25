@@ -18,34 +18,23 @@ utils_ops.tf = tf.compat.v1
 # Patch the location of gfile
 tf.gfile = tf.io.gfile
 
-#model path one wants to analyse
-models = [
-    "ssd_inception_v2",
-    "ssd_mobilenet_v1_fpn",
-    "ssd_mobilenet_v1",
-]
-
-
 class nmsAnalysis:
-
-    with_train = False
-    graph_precision_to_recall = False
+    
+    
     
     def __init__(self, models,imagesPath,annotationPath,catFocus=None, number_IoU_thresh=50,overall = False):
-        print("hey")
         assert(type(models) == list), print("Please input a list of model path")
         self.models = models
         self.imagesPath = imagesPath
         self.annotationPath = annotationPath
-        self.resFilePath = "cocoDt.json"
+        self.resFilePath = self._createResFilePath()
         self.number_IoU_thresh = number_IoU_thresh
         self.iou_thresholdXaxis = np.linspace(0.2, 0.9, number_IoU_thresh)
         self.overall = overall
         self.coco = self.loadCocoApi()
         self.categories = self.getCategories() if catFocus is None else catFocus
-
         # All the variable that will change throughout the study and will be needed in many functions
-        self.__study = {
+        self._study = {
             "img": dict(),
             "catId": int(),
             "catStudied": str(),
@@ -54,10 +43,13 @@ class nmsAnalysis:
             "model": None,  # TF model
             "iouThreshold": float(),
         }
+        
+        self.graph_precision_to_recall = False
+        self.with_train = False
 
     def _createResFilePath(self):
 
-        return "/".join([self.cocoDir, "results", "iou.json"])
+        return "cocoDt.json"
 
     def loadModel(self, modelPath):
         """Load associate tf OD model"""
@@ -79,7 +71,7 @@ class nmsAnalysis:
         categories = [cat['name'] for cat in cats]
         return categories
 
-    def getImgClass(self):
+    def getImgClass(self,category):
         # get all images containing given categories, and the Index of categories studied
         """
         input:
@@ -93,28 +85,33 @@ class nmsAnalysis:
 
             catIds: List of index of categories stydied
         """
-        catIds = self.coco.getCatIds(catNms=[self.__study["catStudied"]])
+        catIds = self.coco.getCatIds(catNms=[category])
         imgIds = self.coco.getImgIds(catIds=catIds)
         img = self.coco.loadImgs(imgIds)
 
-        self.__study["img"] = img
-        self.__study["catId"] = catIds[0]
+        self._study["img"] = img
+        self._study["catId"] = catIds[0]
+    
+    def getCatId(self,category):
+        "Return category Id in the dataset"
+        catIds = self.coco.getCatIds(catNms=[category])
+        return catIds[0]
 
     def load_all_output_dict(self):
 
-        self.__study["model"] = self.loadModel(self.__study["modelPath"])
-        filename = self.__study["modelPath"] + "/all_output_dict.json"
+        self._study["model"] = self.loadModel(self._study["modelPath"])
+        filename = self._study["modelPath"] + "/all_output_dict.json"
         is_all_output_dict = os.path.isfile(filename)
         if not is_all_output_dict:
             print("Compute all the inferences boxes in the validation set for the model {} and save it for faster computations of you reuse the interface in {}/all_output_dict.json".format(
-                self.__study["modelPath"], self.__study["modelPath"]))
-            all_output_dict = self.computeInferenceBbox(self.__study["model"])
+                self._study["modelPath"], self._study["modelPath"]))
+            all_output_dict = self.computeInferenceBbox(self._study["model"])
             with open(filename, 'w') as fs:
                 json.dump(all_output_dict, fs, indent=1)
         else:
             with open(filename, 'r') as fs:
                 all_output_dict = json.load(fs)
-        self.__study["all_output_dict"] = all_output_dict
+        self._study["all_output_dict"] = all_output_dict
 
     def expand_image_to_4d(self, image):
         """image a numpy array representing a gray scale image"""
@@ -149,7 +146,7 @@ class nmsAnalysis:
         # Run inference
         # If image doesn't respect the right format ignore it
         try:
-            output_dict = self.__study["model"](input_tensor)
+            output_dict = self._study["model"](input_tensor)
         except:
             return None
 
@@ -230,7 +227,7 @@ class nmsAnalysis:
         # Apply the nms
         box_selection = tf.image.non_max_suppression_with_scores(
             output_dict['detection_boxes'], output_dict['detection_scores'], 100,
-            iou_threshold=float(self.__study["iouThreshold"]), score_threshold=float(
+            iou_threshold=float(self._study["iouThreshold"]), score_threshold=float(
                 '-inf'),
             soft_nms_sigma=0.0, name=None)
 
@@ -288,18 +285,18 @@ class nmsAnalysis:
         imgIds = set()  # set to avoid repetition
         key_of_interest = ['detection_scores',
                            'detection_classes', 'detection_boxes']
-        for img in self.__study["img"]:
+        for img in self._study["img"]:
             imgId = img["id"]
             imgIds.add(imgId)
 
             output_dict = copy.deepcopy(
-                self.__study["all_output_dict"][img['file_name']])
+                self._study["all_output_dict"][img['file_name']])
             if output_dict == None:
                 continue
 
             # remove detection of other classes that are not studied
             idx_to_remove = [i for i, x in enumerate(
-                output_dict["detection_classes"]) if x != self.__study["catId"]]
+                output_dict["detection_classes"]) if x != self._study["catId"]]
             for index in sorted(idx_to_remove, reverse=True):
                 del output_dict['detection_scores'][index]
                 del output_dict['detection_classes'][index]
@@ -347,14 +344,7 @@ class nmsAnalysis:
 
     def getClassAP(self):
         """
-        input:
-            img: coco class describing the images to study
-            resFile: Json file describing your bbox OD in coco format
-            cocoApi: coco loaded with annotations file
-            catIds: list of class index that we are studying
-            number_IoU_thresh: The number that will used to compute the different AP
-        output:
-            List of AP score associated to the list np.linspace(0.01,0.99,number_IoU_thresh)
+        Return list of AP score evaluated on the category studied  for every un iou in np.linspace(0.2,0.9,self.number_IoU_thresh)
         """
 
         AP = []
@@ -362,7 +352,7 @@ class nmsAnalysis:
         computeInstances = True
         for iouThreshold in tqdm(self.iou_thresholdXaxis, desc="progressbar IoU Threshold"):
 
-            self.__study["iouThreshold"] = iouThreshold
+            self._study["iouThreshold"] = iouThreshold
             # Create the Json result file and read it.
             imgIds = self.writeResJson()
             try:
@@ -371,7 +361,7 @@ class nmsAnalysis:
                 return 1
             cocoEval = COCOeval(self.coco, cocoDt, 'bbox')
             cocoEval.params.imgIds = imgIds
-            cocoEval.params.catIds = self.__study["catId"]
+            cocoEval.params.catIds = self._study["catId"]
             # Here we increase the maxDet to 1000 (same as in model config file)
             # Because we want to optimize the nms that is normally in charge of dealing with
             # bbox that detects the same object twice or detection that are not very precise
@@ -389,7 +379,7 @@ class nmsAnalysis:
             computeInstances = False
             FN.append(int(number_FN))
             cocoEval.accumulate(
-                iouThreshold, withTrain=self.with_train, category=self.__study["catStudied"])
+                iouThreshold, withTrain=self.with_train, category=self._study["catStudied"])
 
             cocoEval.summarize()
             # readDoc and find self.evals
@@ -397,11 +387,14 @@ class nmsAnalysis:
             precisions = cocoEval.s.reshape((101,))
             if self.graph_precision_to_recall:
                 self.precisionToRecall(precisions)
-
-        general_folder = "{}/AP[IoU=0.5]/".format(self.__study["modelPath"])
+    
+        general_folder = "{}/nms_analysis".format(self._study["modelPath"])
         if not os.path.isdir(general_folder):
             os.mkdir(general_folder)
-
+        general_folder += "/AP[IoU=0.5]/"
+        if not os.path.isdir(general_folder):
+            os.mkdir(general_folder)
+            
         if not self.with_train:
             general_folder += "validation/"
         else:
@@ -409,7 +402,7 @@ class nmsAnalysis:
         if not os.path.isdir(general_folder):
             os.mkdir(general_folder)
 
-        with open(general_folder + "{}.json".format(self.__study["catStudied"]), 'w') as fs:
+        with open(general_folder + "{}.json".format(self._study["catStudied"]), 'w') as fs:
             json.dump({"iou threshold": list(self.iou_thresholdXaxis), "AP[IoU:0.5]": AP, "False Negatives": FN,
                        "number of instances": int(instances_non_ignored)}, fs, indent=1)
 
@@ -417,44 +410,35 @@ class nmsAnalysis:
 
     def getOverallAP(self):
         """
-        input:
-            img: coco class describing the images to study
-            resFile: Json file describing your bbox OD in coco format
-            cocoApi: coco loaded with annotations file
-            catIds: list of class index that we are studying
-            number_IoU_thresh: The number that will used to compute the different AP
-        output:
-            List of AP score associated to the list np.linspace(0.01,0.99,number_IoU_thresh)
+        Return list of AP score evaluated on the entire list self.categories for every un iou in np.linspace(0.2,0.9,self.number_IoU_thresh)
         """
 
         AP = []
         FN = []
         computeInstances = True
 
-        for iou in tqdm(self.iou_thresholdXaxis, desc="progressbar IoU Threshold"):
-            # coco = loadCocoApi()
-            # with open("{}/all_output_dict.json".format(modelPath), 'r') as fs:
-            #     all_output_dict = json.load(fs)
+        for iouThreshold in tqdm(self.iou_thresholdXaxis, desc="progressbar IoU Threshold"):
+            self._study["iouThreshold"] = iouThreshold
             allCatIds = []
             allImgIds = []
-            for i, category in tqdm(enumerate(categories), desc="category"):
-
-                img, catIds = self.getImgClass(category, self.coco)
-                allCatIds += [catIds]
+            for i, category in tqdm(enumerate(self.categories), desc="category"):
+                    
+                self.getImgClass(category)
+                allCatIds += [self._study["catId"]]
             # Create the Json result file and read it.
                 if i == 0:
-                    imgIds = self.writeResJson()
+                    imgIds = self.writeResJson(newFile=True)
 
                 else:
                     imgIds = self.writeResJson(newFile=False)
                 allImgIds += imgIds
             try:
-                cocoDt = self.coco.loadRes(resFilePath)
+                cocoDt = self.coco.loadRes(self.resFilePath)
             except:
                 return 1
             cocoEval = COCOeval(self.coco, cocoDt, 'bbox')
             cocoEval.params.imgIds = allImgIds
-            # cocoEval.params.catIds = allCatIds
+            cocoEval.params.catIds = allCatIds
             # Here we increase the maxDet to 1000 (same as in model config file)
             # Because we want to optimize the nms that is normally in charge of dealing with
             # bbox that detects the same object twice or detection that are not very precise
@@ -473,14 +457,13 @@ class nmsAnalysis:
                             np.logical_not(evalImg['gtIgnore']))
             computeInstances = False
             FN.append(int(number_FN))
-            cocoEval.accumulate(iou, withTrain=self.with_train, category='all')
+            cocoEval.accumulate(iouThreshold, withTrain=False, category='all')
 
             cocoEval.summarize()
             # readDoc and find self.evals
             AP.append(cocoEval.stats[1])
-            print(AP)
 
-        general_folder = "{}/AP[IoU=0.5]/".format(self.__study["modelPath"])
+        general_folder = "{}/nms_analysis/AP[IoU=0.5]/".format(self._study["modelPath"])
         if not os.path.isdir(general_folder):
             os.mkdir(general_folder)
 
@@ -490,7 +473,6 @@ class nmsAnalysis:
             general_folder += "validation_train/"
         if not os.path.isdir(general_folder):
             os.mkdir(general_folder)
-
         with open(general_folder + "all.json", 'w') as fs:
             json.dump({"iou threshold": list(self.iou_thresholdXaxis), "AP[IoU:0.5]": AP, "False Negatives": FN,
                        "number of instances": int(instances_non_ignored)}, fs, indent=1)
@@ -505,20 +487,20 @@ class nmsAnalysis:
         """
         plt.figure(figsize=(18, 10))
         recall = np.linspace(0, 1, 101)
-        iouThreshold = round(self.__study["iouThreshold"], 3)
+        iouThreshold = round(self._study["iouThreshold"], 3)
 
         # Plot the data
         plt.plot(recall, precision,
                  label='Precision to recall for IoU = {}'.format(iouThreshold))
         # Add a legend
         plt.legend(loc="lower left")
-        plt.title('Class = {}'.format(self.__study["catStudied"]))
+        plt.title('Class = {}'.format(self._study["catStudied"]))
         plt.xlabel('Recall')
         plt.ylabel('Precision')
 
         # Create correct folder
-        general_folder = "{}/precision_to_recall/".format(
-            self.__study["modelPath"])
+        general_folder = "{}/nms_analysis/precision_to_recall/".format(
+            self._study["modelPath"])
         if not os.path.isdir(general_folder):
             os.mkdir(general_folder)
 
@@ -531,9 +513,10 @@ class nmsAnalysis:
             os.mkdir(general_folder)
 
         category_folder = general_folder + \
-            self.__study["catStudied"].replace(' ', '_')
+            self._study["catStudied"].replace(' ', '_')
         if not os.path.isdir(category_folder):
             os.mkdir(category_folder)
+
 
         plt.savefig(category_folder +
                     '/iou={}.png'.format(iouThreshold), bbox_inches='tight')
@@ -544,19 +527,17 @@ class nmsAnalysis:
     def runAnalysis(self):
         
         if self.with_train:
-            if not os.path.isdir(self.cocoDir+'results/' + 'trainFN/'):
+            if not os.path.isdir('FN_with_nms/'):
                 print("Please run analysis on the groundtruth in order to know the number of false negatives genreated by nms.")
                 return
         for modelPath in self.models:
-            self.__study["modelPath"] = modelPath
+            self._study["modelPath"] = modelPath
             self.load_all_output_dict()
             for catStudied in tqdm(self.categories, desc="Categories Processed", leave=False):
-                self.__study["catStudied"] = catStudied
-                self.getImgClass()
+                self._study["catStudied"] = catStudied
+                self.getImgClass(catStudied)
                 self.getClassAP()
+            if self.overall and not self.with_train:
+                self.getOverallAP()
+                
         os.remove(self.resFilePath)
-        if self.overall:
-            self.getOverallAP()
-
-# test = nmsAnalysis(["ssd_mobilenet_v1"],catFocus=["bicycle"])
-# test.runAnalysis()

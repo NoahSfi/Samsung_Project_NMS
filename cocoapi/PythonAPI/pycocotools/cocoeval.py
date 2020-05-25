@@ -367,10 +367,10 @@ class COCOeval:
         if withTrain:
             with open("FN_with_nms/validationFN/{}.json".format(category),"r") as fs:
                 nmserror = json.load(fs)
-                npig_val = nmserror['instances_not_ignored']
+                npig_val = nmserror["number of instances"]
             with open("FN_with_nms/trainFN/{}.json".format(category),"r") as fs:
                 trainData = json.load(fs)
-                npig_train = trainData['instances_not_ignored']
+                npig_train = trainData["number of instances"]
                 
                 
         for k, k0 in enumerate(k_list):
@@ -505,7 +505,7 @@ class COCOeval:
                 mean_s = -1
             else:
                 mean_s = np.mean(s[s>-1])
-            print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
+            # print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
             
             return mean_s
         def _summarizeDets():

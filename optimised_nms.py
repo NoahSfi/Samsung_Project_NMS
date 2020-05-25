@@ -12,13 +12,11 @@ import os
 class optimisedNMS(nmsAnalysis):
     
     #Inside any model directory after running analysis on it
-    DIR_ANALYSIS = "AP[IoU=0.5]/"
-    DIR_VALIDATION = "validation/"
-    DIR_VALIDATION_TRAIN = "validation_train/"
-    DIR_RESULTS = "final_results/"
+    DIR_GENERAL = "nms_analysis/"
+    DIR_ANALYSIS = DIR_GENERAL +  "AP[IoU=0.5]/"
+    DIR_VALIDATION = DIR_ANALYSIS +  "validation/"
+    DIR_VALIDATION_TRAIN = DIR_ANALYSIS + "validation_train/"
     DIR_MODEL_COMPARISON = "model_comparisons/"
-    
-    #Init is the same than nmsAnalysis
         
     def openJsonData(self,file):
         
@@ -35,7 +33,7 @@ class optimisedNMS(nmsAnalysis):
         return iou,AP,fn,numberInstances
 
 
-    def minMaxScaler(self,array):
+    def _minMaxScaler(self,array):
         M = max(array)
         m = min(array)
         if m == M:
@@ -53,19 +51,15 @@ class optimisedNMS(nmsAnalysis):
         )
 
     def compare_model(self):
-        
-        
-        if not os.path.isdir(self.DIR_RESULTS):
-            os.mkdir(self.DIR_RESULTS)
             
-        if not os.path.isdir(self.DIR_RESULTS + self.DIR_MODEL_COMPARISON):
-            os.mkdir(self.DIR_RESULTS + self.DIR_MODEL_COMPARISON)
+        if not os.path.isdir(self.DIR_MODEL_COMPARISON):
+            os.mkdir(self.DIR_MODEL_COMPARISON)
         
-        for category in tqdm(self.categories):
+        for category in tqdm(self.categories,desc="model comparisons"):
             fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(18, 10))
             no_detection = 0
             for model in self.models:
-                path = model + "/" + self.DIR_ANALYSIS
+                path = model + "/"
                 file = category + '.json'
                 if not os.path.isfile(path + self.DIR_VALIDATION + file):
                     print("No detection by the model {} for the category {}".format(model,category))
@@ -94,7 +88,7 @@ class optimisedNMS(nmsAnalysis):
             
             ax1.legend(loc = 'lower left')
             ax2.legend(loc = 'lower left')
-            fig.savefig(self.DIR_RESULTS + self.DIR_MODEL_COMPARISON + '{}.png'.format(category), bbox_inches='tight')
+            fig.savefig(self.DIR_MODEL_COMPARISON + '{}.png'.format(category), bbox_inches='tight')
             plt.close('all')
 
     # best_overall = argmax ( sum APclass[iou]*var(class))
@@ -107,7 +101,7 @@ class optimisedNMS(nmsAnalysis):
             final_weight[category] = weight[category]
             
         for category in self.categories:
-            path = model + "/" + self.DIR_ANALYSIS
+            path = model + "/" 
             file = category + '.json'
             if not os.path.isfile(path + computationDir + file):
                 print("No detection by the model {} for the category {}".format(model,category))
@@ -143,27 +137,25 @@ class optimisedNMS(nmsAnalysis):
         
         # plt.rc('text', usetex=False)
         plt.title("Function min max scaled")
-        
-        if not os.path.isdir(self.DIR_RESULTS):
-            os.mkdir(self.DIR_RESULTS)
-        if not os.path.isdir(self.DIR_RESULTS + "optimal_overall/"):
-            os.mkdir(self.DIR_RESULTS + "optimal_overall/")
-        plt.savefig(self.DIR_RESULTS + "optimal_overall/overallSum_{}.png".format(computationDir.replace("/","")),bbox_inches='tight')
+        path = model + "/" + self.DIR_GENERAL
+        if not os.path.isdir(path + "optimal_overall/"):
+            os.mkdir(path + "optimal_overall/")
+        plt.savefig(path + "optimal_overall/overallSum_{}.png".format("validation_train" if computationDir == self.DIR_VALIDATION_TRAIN else self.DIR_VALIDATION),bbox_inches='tight')
         
         result = {
             "Normal Distribution": iou[np.argmax(overallSum["AP"])],
             "Weight with variance":iou[np.argmax(overallSum["AP*var"])],
             "Weighted by user": iou[np.argmax(overallSum["AP*weight"])],
         }
-        with open(self.DIR_RESULTS + "optimal_overall/mean_{}.json".format(computationDir.replace("/","")),"w") as fs:
+        with open(path + "optimal_overall/mean_{}.json".format("validation_train" if computationDir == self.DIR_VALIDATION_TRAIN else self.DIR_VALIDATION),"w") as fs:
             json.dump(result,fs,indent=1)
         return 0
 
 
-    def plotOverall(self,models):
+    def plotOverall(self):
         plt.figure(figsize=(18, 10))
-        for model in models:
-            path = model + "/" + self.DIR_ANALYSIS
+        for model in self.models:
+            path = model + "/"
             file = 'all.json'
             
             
@@ -180,20 +172,33 @@ class optimisedNMS(nmsAnalysis):
         plt.xlabel("IoU threshold")
         plt.ylabel("AP[IoU=0.5]")
         plt.legend()
-        plt.savefig(self.DIR_RESULTS + self.DIR_MODEL_COMPARISON + 'all.png', bbox_inches='tight')
+        plt.savefig(self.DIR_MODEL_COMPARISON + 'all.png', bbox_inches='tight')
         plt.close('all')
 
-# def main(): 
-# #     compare_model(models)
-#     models = ["ssd_mobilenet_v1_fpn"]
-#     plotOverall(models)
-#     model = "ssd_mobilenet_v1_fpn"
-#     overallArgmax(model,computationDir=DIR_VALIDATION)
-#     overallArgmax(model,computationDir=DIR_VALIDATION_TRAIN)
-
-# if __name__ == "__main__":
-    
-#     main()
-
-test = optimisedNMS(["ssd_mobilenet_v1_fpn","ssd_inception_v2"])
-test.compare_model()
+    def writeMapIoU(self,with_train=False):
+        end = '\n'
+        s = ' '
+        for model in self.models:
+            path = model + "/"
+            open(path + self.DIR_GENERAL + "iouThreshmap.pbtxt","w").close() 
+            for category in self.categories:
+                file = category + '.json'
+                if not os.path.isfile(path + self.DIR_VALIDATION + file):
+                    print("No detection by the model {} for the category {}".format(model,category))
+                    continue
+                catId = self.getCatId(category)
+                if not with_train:
+                    iou,AP,_,_ = self.openJsonData(path + self.DIR_VALIDATION+file)
+                else:
+                    iou,AP,fn,numberInstances = self.openJsonData(path + self.DIR_VALIDATION_TRAIN+file)
+                    
+                idx = np.argmax(np.flip(AP))
+                bestIoU = np.flip(iou)[idx]
+                out = ''
+                out += 'item' + s + '{' + end
+                out += s*2 + 'id:' + s + str(catId) + end
+                out += s*2 + 'display_name:' + s + str(category)  + end
+                out += s*2 + 'iou_threshold:' + s  + str(bestIoU)  + end
+                out += '}' + end*2
+                with open(path + self.DIR_GENERAL + "iouThreshmap.pbtxt","a") as fs:
+                    fs.write(out) 
