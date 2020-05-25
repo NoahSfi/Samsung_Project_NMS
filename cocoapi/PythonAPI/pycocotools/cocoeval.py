@@ -365,10 +365,10 @@ class COCOeval:
         
         """If one wants to add MRnms_train and remove MRerr"""
         if withTrain:
-            with open("cocoapi/results/validation/{}.json".format(category),"r") as fs:
+            with open("FN_with_nms/validationFN/{}.json".format(category),"r") as fs:
                 nmserror = json.load(fs)
                 npig_val = nmserror['instances_not_ignored']
-            with open("cocoapi/results/train/{}.json".format(category),"r") as fs:
+            with open("FN_with_nms/trainFN/{}.json".format(category),"r") as fs:
                 trainData = json.load(fs)
                 npig_train = trainData['instances_not_ignored']
                 
@@ -505,7 +505,7 @@ class COCOeval:
                 mean_s = -1
             else:
                 mean_s = np.mean(s[s>-1])
-            # print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
+            print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
             
             return mean_s
         def _summarizeDets():

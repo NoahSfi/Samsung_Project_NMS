@@ -28,6 +28,7 @@ from tqdm import tqdm
 from PIL import Image, ImageDraw
 from cocoapi.PythonAPI.pycocotools.coco import COCO
 from cocoapi.PythonAPI.pycocotools.cocoeval import COCOeval
+import copy
 import os
 utils_ops.tf = tf.compat.v1
 # Patch the location of gfile
@@ -244,7 +245,7 @@ def putCOCOformat(boxes, im_width, im_height):
     return [left, top, width, height]
 
 
-def writeResJson(img, resFilePath, all_output_dict, catIds, iou_threshold):
+def writeResJson(img, resFilePath, all_output_dict, catIds, iou_threshold,newFile = True):
     """
     Write a Json file in the coco annotations format for bbox detections
 
@@ -268,11 +269,10 @@ def writeResJson(img, resFilePath, all_output_dict, catIds, iou_threshold):
     for i in range(len(img)):
         imgId = img[i]["id"]
         imgIds.add(imgId)
-        try:
-            output_dict = all_output_dict[img[i]['file_name']].copy()
-        except:
+        
+        output_dict = copy.deepcopy(all_output_dict[img[i]['file_name']])
+        if output_dict == None:
             continue
-
         # remove detection of other classes that are not studied
         idx_to_remove = [i for i, x in enumerate(
             output_dict["detection_classes"]) if x != catIds]
@@ -310,15 +310,22 @@ def writeResJson(img, resFilePath, all_output_dict, catIds, iou_threshold):
             properties["score"] = float(final_scores[j])
 
             result.append(properties)
-    with open(resFilePath, 'w+') as fs:
-        json.dump(result, fs, indent=1)
+    if newFile:
+        with open(resFilePath, 'w') as fs:
+            json.dump(result, fs, indent=1)
+    else:
+        with open(resFilePath, 'r') as fs:
+            data = json.load(fs)
+            result += data
+        with open(resFilePath, 'w') as fs:
+            json.dump(result, fs, indent=1) 
+        
 
     return list(imgIds)
 
-def getAP05(model, all_output_dict, img, resFilePath, cocoApi, catIds, catStudied, modelPath, number_IoU_thresh=50):
+def getAP05(all_output_dict, img, resFilePath, cocoApi, catIds, catStudied, modelPath, number_IoU_thresh=50):
     """
     input:
-        model : OD detector
         img: coco class describing the images to study
         resFile: Json file describing your bbox OD in coco format
         cocoApi: coco loaded with annotations file
@@ -383,6 +390,93 @@ def getAP05(model, all_output_dict, img, resFilePath, cocoApi, catIds, catStudie
                     "number of instances": int(instances_non_ignored) }, fs, indent=1)
 
     return 0
+
+def getOverallAP(all_output_dict, resFilePath, cocoApi, modelPath,categories, number_IoU_thresh=50):
+    """
+    input:
+        img: coco class describing the images to study
+        resFile: Json file describing your bbox OD in coco format
+        cocoApi: coco loaded with annotations file
+        catIds: list of class index that we are studying
+        number_IoU_thresh: The number that will used to compute the different AP
+    output:
+        List of AP score associated to the list np.linspace(0.01,0.99,number_IoU_thresh)
+    """
+
+    iou_thresholdXaxis = np.linspace(0.2, 0.9, number_IoU_thresh)
+    AP = []
+    FN = []
+    computeInstances = True
+    
+    for iou in tqdm(iou_thresholdXaxis,desc="progressbar IoU Threshold"):
+        # coco = loadCocoApi()
+        # with open("{}/all_output_dict.json".format(modelPath), 'r') as fs:
+        #     all_output_dict = json.load(fs)
+        allCatIds = []
+        allImgIds = []
+        for i,category in tqdm(enumerate(categories),desc="category"):
+            
+            img, catIds = getImgClass(category, cocoApi)
+            allCatIds += [catIds]
+        # Create the Json result file and read it.
+            if i == 0:
+                imgIds = writeResJson(img, resFilePath, all_output_dict,
+                                    catIds, iou_threshold=float(iou))
+                
+            else:
+                imgIds = writeResJson(img, resFilePath, all_output_dict,
+                                    catIds, iou_threshold=float(iou),newFile=False)
+            allImgIds += imgIds
+            
+        try:
+            cocoDt = cocoApi.loadRes(resFilePath)
+        except:
+            return 1
+        cocoEval = COCOeval(cocoApi, cocoDt, 'bbox')
+        cocoEval.params.imgIds = allImgIds
+        # cocoEval.params.catIds = allCatIds
+        # Here we increase the maxDet to 1000 (same as in model config file)
+        # Because we want to optimize the nms that is normally in charge of dealing with
+        # bbox that detects the same object twice or detection that are not very precise
+        # compared to the best one.
+        cocoEval.params.maxDets = [1, 10, 1000]
+        cocoEval.evaluate()
+        number_FN = 0
+        if computeInstances:
+            instances_non_ignored = 0
+        
+        for evalImg in cocoEval.evalImgs:
+            if evalImg != None:
+                number_FN += sum(evalImg["FN"])
+                if computeInstances:
+                    instances_non_ignored += sum(np.logical_not(evalImg['gtIgnore']))
+        computeInstances = False
+        FN.append(int(number_FN))
+        cocoEval.accumulate(iou,withTrain=WITH_TRAIN,category='all')
+        
+        cocoEval.summarize()
+        # readDoc and find self.evals
+        AP.append(cocoEval.stats[1])
+        print(AP)
+    
+    general_folder = "{}/AP[IoU=0.5]/".format(modelPath)
+    if not os.path.isdir(general_folder):
+        os.mkdir(general_folder)
+    
+    if not WITH_TRAIN:
+        general_folder += "validation/" 
+    else:
+        general_folder += "validation_train/"
+    if not os.path.isdir(general_folder):
+        os.mkdir(general_folder)
+        
+    with open(general_folder + "all.json", 'w') as fs:
+            json.dump({"iou threshold": list(iou_thresholdXaxis), "AP[IoU:0.5]": AP, "False Negatives": FN,
+                    "number of instances": int(instances_non_ignored) }, fs, indent=1)
+
+    return 0
+
+
 def precisionToRecall(precision,iouThreshold, catStudied, modelPath):
     """
     precision -[all] P = 101. Precision for each recall
@@ -452,11 +546,12 @@ def main(modelPath, resFilePath, cocoDir, valType, number_IoU_thresh=50, catFocu
             all_output_dict = json.load(fs)
 
     categories = getCategories(coco) if catFocus == [] else catFocus
-    for catStudied in tqdm(categories, desc="Categories Processed", leave=False):
-        img, catIds = getImgClass(catStudied, coco)
+    # for catStudied in tqdm(categories, desc="Categories Processed", leave=False):
+    #     img, catIds = getImgClass(catStudied, coco)
 
-        getAP05(model, all_output_dict, img, resFilePath, coco,
-                            catIds, catStudied, modelPath, number_IoU_thresh=number_IoU_thresh)
+    #     getAP05(all_output_dict, img, resFilePath, coco,
+    #                         catIds, catStudied, modelPath, number_IoU_thresh=number_IoU_thresh)
+    getOverallAP(all_output_dict,resFilePath,coco,modelPath,categories)
 
         
             
@@ -464,26 +559,30 @@ def main(modelPath, resFilePath, cocoDir, valType, number_IoU_thresh=50, catFocu
 WITH_TRAIN = False
 
 #Chose if you want to graph the precision to recall if you want more precision
-GRAPH_PRECISION_TO_RECALL = True
-
-if __name__ == "__main__":
-    # execute only if run as a script
-    
-    #Put other model, be aware that the script will insert results in the model folder
-    models = [
+GRAPH_PRECISION_TO_RECALL = False
+models = [
         "ssd_inception_v2",
         "ssd_mobilenet_v1_fpn",
         "ssd_mobilenet_v1",
         ]
-    for modelPath in models:
-        for train in [False,True]:
+# if __name__ == "__main__":
+#     # execute only if run as a script
+    
+#     #Put other model, be aware that the script will insert results in the model folder
+   
+#     for modelPath in models:
+#         for train in [True]:
             
-            WITH_TRAIN = train
-            main(modelPath=modelPath,
-                resFilePath="cocoapi/results/iou.json",
-                cocoDir="cocoapi",
-                valType="val2017",
-                catFocus=[])
+#             WITH_TRAIN = train
+#             main(modelPath=modelPath,
+#                 resFilePath="cocoapi/results/iou.json",
+#                 cocoDir="cocoapi",
+#                 valType="val2017",
+                # catFocus=[])
 
 
-
+main(modelPath="ssd_mobilenet_v1",
+        resFilePath="cocoapi/results/iou.json",
+        cocoDir="cocoapi",
+        valType="val2017",
+        catFocus=[])
