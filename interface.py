@@ -41,10 +41,10 @@ def main(models,imagesPath,annotationValidation,catFocus = None,number_IoU_thres
 def getResult(models,annotationValidation,catFocus = None):
     """Once one get the all the required files. Check your models directort to get the result """
     optimiser = optimisedNMS(models,None,annotationValidation,catFocus=catFocus)
-    # optimiser.compare_model()
-    # for model in models:
-    #     optimiser.overallArgmax(model)
-    # optimiser.plotOverall()
+    optimiser.compare_model()
+    for model in models:
+        optimiser.overallArgmax(model)
+    optimiser.plotOverall()
     optimiser.writeMapIoU()
 
 models = [
