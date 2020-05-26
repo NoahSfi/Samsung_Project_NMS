@@ -10,8 +10,8 @@ from object_detection.utils import ops as utils_ops
 from object_detection.core import post_processing
 from tqdm import tqdm
 from PIL import Image, ImageDraw
-from cocoapi.PythonAPI.pycocotools.coco import COCO
-from cocoapi.PythonAPI.pycocotools.cocoeval import COCOeval
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 import copy
 import os
 utils_ops.tf = tf.compat.v1

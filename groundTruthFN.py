@@ -18,8 +18,8 @@ import numpy as np
 import json
 from matplotlib import pyplot as plt
 from tqdm import tqdm
-from cocoapi.PythonAPI.pycocotools.coco import COCO
-from cocoapi.PythonAPI.pycocotools.cocoeval import COCOeval
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 from nmsAnalysis import nmsAnalysis
 import random
 import os

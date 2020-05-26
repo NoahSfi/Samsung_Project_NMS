@@ -9,6 +9,5 @@ ssd_mobilenet_v1_fpn
 ssd_mobilenet_v1
 ssd_inception_v2
 final_results
-cocoapi
 FN_with_nms
 model_comparisons
