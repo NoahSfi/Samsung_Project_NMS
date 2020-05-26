@@ -8,6 +8,5 @@ __pycache__
 ssd_mobilenet_v1_fpn
 ssd_mobilenet_v1
 ssd_inception_v2
-final_results
 FN_with_nms
 model_comparisons

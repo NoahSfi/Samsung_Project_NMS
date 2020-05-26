@@ -85,5 +85,8 @@ All the results for a given model will be written inside the model path in the f
 
 The final result of each category will be written with `optimiser.writeMapIoU()` in **nms_analysis/iouThreshmap.pbtxt**. And the overall inside the folder **nms_analysis/optimal_overall**.
 
+When running a model, it will create a file **all_outpout_dict.json** it is a dictionnary containing all detections made by the model. It allows faster computation for other analysis with the same model.
+
+
 ## Contributing
 
