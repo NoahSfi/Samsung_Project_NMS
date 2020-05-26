@@ -1,6 +1,4 @@
-cocoapi/val2014/*
-cocoapi/annotations/*
-cocoapi/val2017/*
+cocoapi/
 __pycache__
 .vscode
 .ipynb_checkpoints
@@ -9,4 +7,5 @@ ssd_mobilenet_v1_fpn
 ssd_mobilenet_v1
 ssd_inception_v2
 FN_with_nms
+/Users/noahsarfati/Documents/samsung/optimisedNMS/cocoapi
 model_comparisons
