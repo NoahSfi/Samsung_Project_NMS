@@ -61,8 +61,8 @@ from optimised_nms import optimisedNMS
     for model in models:
         optimiser.overallArgmax(model)
         ptimiser.plotOverall()
-"""Here is a complete example of use with MR_nms_train"""
 
+"""Here is a complete example of use with MR_nms_train"""
     fn_validation = GroundTruthFN(annotationValidation,dataType="validation",catFocus=catFocus)
     fn_validation.runAnalysis()
     fn_train = GroundTruthFN(annotationTrain,dataType="train",catFocus=catFocus)
