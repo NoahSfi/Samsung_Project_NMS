@@ -45,7 +45,8 @@ from groundTruthFN import GroundTruthFN
 from optimised_nms import optimisedNMS
 
 """Here is a complete example of use if one only wants to deal with the validation data set"""
-    # If catFocus = None then it takes all the categories inside the annotation file of the validation dataset. Else one can specify like this catFocus = ["person","bicycle"]. 
+    # If catFocus = None then it takes all the categories inside the annotation file of the validation dataset. 
+    # Else one can specify like this catFocus = ["person","bicycle"]. 
     # models is a list of path to the OD models.
     # annotationValidation is the path to the annotation file of the validation dataset.
     # imagesPath is the path to the images.
