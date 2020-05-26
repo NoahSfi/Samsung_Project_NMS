@@ -17,13 +17,13 @@ def evaluateFN(annotationTrain,annotationValidation,catFocus=None):
     fn_train.runAnalysis()
     print("\n Done. \n")
     
-def main(models,imagesPath,annotationValidation,catFocus = None,number_IoU_thresh=50,overall = True,evaluateFNnms = True,annotationTrain = None):
+def main(models,imagesPath,annotationValidation,catFocus = None,number_IoU_thresh=50,overall = True,with_train = True,annotationTrain = None):
     
-    if evaluateFN and annotationTrain == None:
+    if with_train and annotationTrain == None:
         print("Please input an annotation file for the training set")
         raise ReferenceError
         
-    if evaluateFNnms:
+    if with_train:
         evaluateFN(annotationTrain,annotationValidation,catFocus=catFocus)
     
     print("Starting analysis only with validation dataset... \n")
@@ -38,9 +38,10 @@ def main(models,imagesPath,annotationValidation,catFocus = None,number_IoU_thres
     analyser.runAnalysis()
 
 
-def getResult(models,annotationValidation,catFocus = None):
+def getResult(models,annotationValidation,catFocus = None,with_train = True):
     """Once one get the all the required files. Check your models directort to get the result """
     optimiser = optimisedNMS(models,None,annotationValidation,catFocus=catFocus)
+    optimiser.with_train = with_train
     optimiser.compare_model()
     for model in models:
         optimiser.overallArgmax(model)
@@ -56,7 +57,8 @@ annotationValidation = "cocoapi/annotations/instances_val2017.json"
 
 #Set to None if you wish to work on all categories
 catFocus = ["bicycle"]
+with_train = True
 
-main(models,imagesPath,annotationValidation,annotationTrain= annotationTrain,catFocus=catFocus,overall=True,evaluateFNnms=False)
+# main(models,imagesPath,annotationValidation,annotationTrain= annotationTrain,catFocus=catFocus,overall=True,evaluateFNnms=with_Train)
 
-getResult(models,annotationValidation,catFocus=catFocus)
+getResult(models,annotationValidation,catFocus=catFocus,with_train = with_train)

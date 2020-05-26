@@ -11,6 +11,51 @@ import os
 
 class optimisedNMS(nmsAnalysis):
     
+    """
+    The goal of this class is to use the results of `nmsAnalysis` in order to compute the optimal 
+    IoU Threshold to use in the normal suppression algorithm.
+    
+    The initialisation is the same than `nmsAnalysis`, `imagePath` can be set to None.
+    
+    In the continuity of `nmsAnalysis` all the results will be written inside your modelPath in the 
+    folder `nmsAnalysis`.
+    
+    - Here is a complete example of use if one only wants to deal with the validation data set.
+    
+        - analyser = nmsAnalysis(models,imagesPath,annotationValidation,catFocus,number_IoU_thresh,overall)
+        - analyser.with_train = False
+        - analyser.runAnalysis()
+        - optimiser = optimisedNMS(models,None,annotationValidation,catFocus=catFocus)
+        -optimiser.with_train = False
+        -optimiser.compare_model()
+        -for model in models:
+            - optimiser.overallArgmax(model)
+        -optimiser.plotOverall()
+        -optimiser.writeMapIoU()
+    
+    - Here is a complete example of use if one wants to replace the ratio of false negatives generated
+    by the nms algoeithm in the validation dataset by the one in the training dataset. The run will be
+    longer but the results will be more precise. In any case one will be able to visualise the difference
+    with optimiser.compare_model().
+
+        - fn_validation = GroundTruthFN(annotationValidation,dataType="validation",catFocus=catFocus)
+        - fn_validation.runAnalysis()
+        - fn_train = GroundTruthFN(annotationTrain,dataType="train",catFocus=catFocus)
+        - fn_train.runAnalysis()
+        
+        - analyser = nmsAnalysis(models,imagesPath,annotationValidation,catFocus,number_IoU_thresh,overall)
+        - analyser.with_train = True
+        - analyser.runAnalysis()
+        - optimiser = optimisedNMS(models,None,annotationValidation,catFocus=catFocus)
+        - optimiser.with_train = True
+        - optimiser.compare_model()
+        - for model in models:
+            - optimiser.overallArgmax(model)
+        - optimiser.plotOverall()
+        - optimiser.writeMapIoU()
+    
+    """
+    
     #Inside any model directory after running analysis on it
     DIR_GENERAL = "nms_analysis/"
     DIR_ANALYSIS = DIR_GENERAL +  "AP[IoU=0.5]/"
@@ -19,7 +64,15 @@ class optimisedNMS(nmsAnalysis):
     DIR_MODEL_COMPARISON = "model_comparisons/"
         
     def openJsonData(self,file):
+        """
+        Load a json file in the shape of the one written in `nmsAnalysis`.
+        :return:
         
+        - iou: List of different IoU treshold studied
+        - AP:  AP corresponding to each treshold
+        - fn:  false negatives corresponding to each treshold
+        - numberInstances: The number of instances that were evaluated.
+        """
         with open(file,"r") as fs:
             data = json.load(fs)
             iou = np.array(data['iou threshold'])
@@ -34,6 +87,11 @@ class optimisedNMS(nmsAnalysis):
 
 
     def _minMaxScaler(self,array):
+        """
+        :param array: array of digits
+        
+        :return: (array-min)/(max - min) if max != min else array.
+        """
         M = max(array)
         m = min(array)
         if m == M:
@@ -42,6 +100,15 @@ class optimisedNMS(nmsAnalysis):
             return (array-m)/(M - m)
 
     def _plotModels(self,ax,iou,AP,model):
+        """
+        Plot the AP to IoU for a given model onto a given axis of the graph
+        :param ax: a matplotlib.pyplot axis
+        :param iou: list of IoU Threshold i.e the X-axis.
+        :param AP: list of corresponding AP i.e the Y-axis
+        :param model: Under which model were the results found
+        
+        :return: None
+        """
         ax.plot(iou,AP,label = model)
         idx = np.argmax(np.flip(AP))
         xmax = np.flip(iou)[idx]
@@ -51,12 +118,20 @@ class optimisedNMS(nmsAnalysis):
         )
 
     def compare_model(self):
-            
+        """
+        Plot the AP to IoU treshold for each `self.models` and each category onto the same graph.
+        The results will be written in the folder `model_comparisons` in the relative path.
+        If `self.withTrain` is set to True, 2 axis will be plot one using only the validation set and one
+        using the fn/npig ratio of the training dataset.
+        """
         if not os.path.isdir(self.DIR_MODEL_COMPARISON):
             os.mkdir(self.DIR_MODEL_COMPARISON)
         
         for category in tqdm(self.categories,desc="model comparisons"):
-            fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(18, 10))
+            if self.with_train:
+                fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(18, 10))
+            else:
+                fig,ax1 = plt.subplots(1, 1,figsize=(18, 10))
             no_detection = 0
             for model in self.models:
                 path = model + "/"
@@ -68,9 +143,9 @@ class optimisedNMS(nmsAnalysis):
                 
                 iou,AP,fn,numberInstances = self.openJsonData(path + self.DIR_VALIDATION+file)
                 self._plotModels(ax1,iou,AP,model)
-                
-                iou,AP,fn,numberInstances = self.openJsonData(path + self.DIR_VALIDATION_TRAIN+file)
-                self._plotModels(ax2,iou,AP,model)
+                if self.with_train:
+                    iou,AP,fn,numberInstances = self.openJsonData(path + self.DIR_VALIDATION_TRAIN+file)
+                    self._plotModels(ax2,iou,AP,model)
                 
                 
             if no_detection == len(self.models):
@@ -81,21 +156,41 @@ class optimisedNMS(nmsAnalysis):
             ax1.title.set_text("AP[IoU=0.5] validation")
             ax1.set_xlabel("IoU threshold")
             ax1.set_ylabel("AP[IoU=0.5]")
-            
-            ax2.title.set_text("AP[IoU=0.5] validation with train MR_nms")
-            ax2.set_xlabel("IoU threshold")
-            ax2.set_ylabel("AP[IoU=0.5]")
-            
             ax1.legend(loc = 'lower left')
-            ax2.legend(loc = 'lower left')
+            if self.with_train:
+                ax2.title.set_text("AP[IoU=0.5] validation with train MR_nms")
+                ax2.set_xlabel("IoU threshold")
+                ax2.set_ylabel("AP[IoU=0.5]")
+                ax2.legend(loc = 'lower left')
+            
+            
+            
             fig.savefig(self.DIR_MODEL_COMPARISON + '{}.png'.format(category), bbox_inches='tight')
             plt.close('all')
 
-    # best_overall = argmax ( sum APclass[iou]*var(class))
-    def overallArgmax(self,model,computationDir = DIR_VALIDATION_TRAIN,weight = dict()):
+
+    def overallArgmax(self,model,weight = dict()):
+        """
+        Compute the overall best IoU treshold for the entire `self.categories`. 
         
+        3 results will be given:
+        
+        - argmax_{iou}(sum_{cat}AP(cat,iou))
+        - argmax_{iou}(sum_{cat}AP(cat,iou)*var(AP(cat)))
+        - argmax_{iou}(sum_{cat}AP(cat,iou)*weight(cat))
+        
+        Each formula inside the argmax will be ploted. The result of it will be written
+        inside `argmax_{computationDir}.json`
+        
+        Results can be found in the model folder inside `nms_analysis/optimal_overall`
+        
+        :param model: path to the model to study
+        :weight: dictionary of the form {category: weight} if not precise each category has a weight of 1.
+        
+        :return: None
+        """
         data = dict()
-        
+        computationDir = self.DIR_VALIDATION if not self.with_train else self.DIR_VALIDATION_TRAIN
         final_weight = {category : 1 for category in self.categories}
         for category in weight.keys():
             final_weight[category] = weight[category]
@@ -147,12 +242,19 @@ class optimisedNMS(nmsAnalysis):
             "Weight with variance":iou[np.argmax(overallSum["AP*var"])],
             "Weighted by user": iou[np.argmax(overallSum["AP*weight"])],
         }
-        with open(path + "optimal_overall/mean_{}.json".format("validation_train" if computationDir == self.DIR_VALIDATION_TRAIN else self.DIR_VALIDATION),"w") as fs:
+        with open(path + "optimal_overall/argmax_{}.json".format("validation_train" if computationDir == self.DIR_VALIDATION_TRAIN else self.DIR_VALIDATION),"w") as fs:
             json.dump(result,fs,indent=1)
-        return 0
+        
 
 
     def plotOverall(self):
+        """
+        Plot the AP to iouThreshold for the overall categories.
+        Inside the plot there will be a curve for each model in `self.models`.
+        
+        Result will be found in the `model_comparisons` folder in the relative path.
+        """
+        
         plt.figure(figsize=(18, 10))
         for model in self.models:
             path = model + "/"
@@ -176,6 +278,18 @@ class optimisedNMS(nmsAnalysis):
         plt.close('all')
 
     def writeMapIoU(self,with_train=False):
+        """
+        For each model in self.models write a pbtxt of the form:
+        
+        - item {
+            id: 2
+            display_name: category
+            iou_threshold: optimal iou
+        }
+        
+        The file will be in `modelPath/nms_analysis/iouThreshmap.pbtxt`
+        """
+        
         end = '\n'
         s = ' '
         for model in self.models:
