@@ -1,14 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Mar 31 22:44:21 2020
-
-@author: noahsarfati
-"""
-
-###############################################################################
-
-""" Please download in the cocoapi folder d `2017 val/train annotations` under the names `annotations`"""
+__author__ = 'noahsfi'
 
 ###############################################################################
 

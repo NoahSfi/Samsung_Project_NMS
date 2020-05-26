@@ -1,4 +1,8 @@
+__author__ = 'noahsfi'
 
+###############################################################################
+
+# import the necessary packages
 
 import glob
 import numpy as np
@@ -17,6 +21,8 @@ import os
 utils_ops.tf = tf.compat.v1
 # Patch the location of gfile
 tf.gfile = tf.io.gfile
+
+###############################################################################
 
 
 class nmsAnalysis:

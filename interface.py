@@ -1,8 +1,15 @@
+
+###############################################################################
+
+# import the necessary packages
+
 from nmsAnalysis import nmsAnalysis
 from groundTruthFN import GroundTruthFN
 from optimised_nms import optimisedNMS
 import time
 import os
+
+###############################################################################
 
 def evaluateFN(annotationTrain,annotationValidation,catFocus=None):
 

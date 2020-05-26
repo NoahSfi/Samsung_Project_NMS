@@ -1,3 +1,8 @@
+__author__ = 'noahsfi'
+
+###############################################################################
+
+# import the necessary packages
 import numpy as np
 import json
 import matplotlib.pyplot as plt
@@ -5,9 +10,7 @@ from nmsAnalysis import nmsAnalysis
 from tqdm import tqdm
 import os
 
-
-
-
+###############################################################################
 
 class optimisedNMS(nmsAnalysis):
     

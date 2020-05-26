@@ -28,9 +28,9 @@ The project allows to compare different models, plot the precision to recall for
 
 In order to run correctly the analysis one need to have:
 
-* An annotation file for the validation dataset
+* An annotation file for the validation dataset in the coco format.
 * A folder containing all the images of the validation dataset
-* If one wants to use MR_nms_train, an annotation file for the training dataset
+* If one wants to use MR_nms_train, an annotation file for the training dataset in the cocoformat.
 * A folder containing a tensorflow OD model. Please visit [Tensorflow detection model zoo](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md).
 
 **Caution**: All the results will be written in the relative path.
@@ -85,7 +85,7 @@ All the results for a given model will be written inside the model path in the f
 
 The final result of each category will be written with `optimiser.writeMapIoU()` in **nms_analysis/iouThreshmap.pbtxt**. And the overall inside the folder **nms_analysis/optimal_overall**.
 
-When running a model, it will create a file **all_outpout_dict.json** it is a dictionnary containing all detections made by the model. It allows faster computation for other analysis with the same model.
+When running a model, it will create a file **all_output_dict.json** it is a dictionnary containing all detections made by the model. It allows faster computation for other analysis with the same model.
 
 
 ## Contributing
